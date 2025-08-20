@@ -36,20 +36,47 @@ const AdminLoginPage = () => {
 
     try {
       // Admin bilgilerini kontrol et
-      if (formData.username === "admin" && formData.password === "123") {
+      const adminCredentials = {
+        admin: {
+          password: "123",
+          token: "admin_token_123",
+          role: "survey_admin",
+        },
+        forms_admin: {
+          password: "456",
+          token: "forms_admin_token_456",
+          role: "forms_admin",
+        },
+        super_admin: {
+          password: "789",
+          token: "super_admin_token_789",
+          role: "super_admin",
+        },
+      };
+
+      const admin = adminCredentials[formData.username];
+
+      if (admin && formData.password === admin.password) {
         // Admin token'ı oluştur ve kaydet
-        const adminToken = "admin_token_123";
-        localStorage.setItem("admin_token", adminToken);
+        localStorage.setItem("admin_token", admin.token);
         localStorage.setItem(
           "admin_user",
           JSON.stringify({
-            username: "admin",
-            role: "admin",
+            username: formData.username,
+            role: admin.role,
           })
         );
 
+        // Role'a göre yönlendirme
+        let redirectPath = "/admin";
+        if (admin.role === "forms_admin") {
+          redirectPath = "/admin/forms";
+        } else if (admin.role === "super_admin") {
+          redirectPath = "/admin/super";
+        }
+
         alert("Admin girişi başarılı! Admin paneline yönlendiriliyorsunuz.");
-        navigate("/admin");
+        navigate(redirectPath);
       } else {
         setError("Kullanıcı adı veya şifre hatalı!");
       }
@@ -163,8 +190,11 @@ const AdminLoginPage = () => {
               Admin Bilgileri
             </h3>
             <p className="text-xs text-blue-600">
-              Kullanıcı Adı: <strong>admin</strong> | Şifre:{" "}
-              <strong>123</strong>
+              <strong>Survey Admin:</strong> admin / 123
+              <br />
+              <strong>Forms Admin:</strong> forms_admin / 456
+              <br />
+              <strong>Super Admin:</strong> super_admin / 789
             </p>
           </div>
         </div>

@@ -12,6 +12,8 @@ import ChatPage from "./pages/ChatPage";
 import SurveyPage from "./pages/SurveyPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminPanelPage from "./pages/AdminPanelPage";
+import FormsAdminPage from "./pages/FormsAdminPage";
+import SuperAdminPage from "./pages/SuperAdminPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
 
@@ -56,6 +58,22 @@ const AppRouter = () => {
         element={
           <AdminProtectedRoute>
             <AdminPanelPage />
+          </AdminProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/forms"
+        element={
+          <AdminProtectedRoute>
+            <FormsAdminPage />
+          </AdminProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/super"
+        element={
+          <AdminProtectedRoute>
+            <SuperAdminPage />
           </AdminProtectedRoute>
         }
       />

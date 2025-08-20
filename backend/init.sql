@@ -31,7 +31,9 @@ CREATE TABLE IF NOT EXISTS web_forms (
     phone VARCHAR(20) NOT NULL,
     project_description TEXT NOT NULL,
     budget VARCHAR(20),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    status VARCHAR(20) DEFAULT 'beklemede' CHECK (status IN ('beklemede', 'onaylandı', 'görüşüldü', 'reddedildi')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Mobile app forms tablosu - Mobil uygulama formları
@@ -44,7 +46,9 @@ CREATE TABLE IF NOT EXISTS mobile_forms (
     phone VARCHAR(20) NOT NULL,
     project_description TEXT NOT NULL,
     budget VARCHAR(20),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    status VARCHAR(20) DEFAULT 'beklemede' CHECK (status IN ('beklemede', 'onaylandı', 'görüşüldü', 'reddedildi')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Survey status tablosu - Anket durumu ve cevapları
@@ -89,6 +93,20 @@ CREATE TRIGGER update_users_updated_at
 DROP TRIGGER IF EXISTS update_survey_status_updated_at ON survey_status;
 CREATE TRIGGER update_survey_status_updated_at
     BEFORE UPDATE ON survey_status
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger oluştur - web_forms tablosu için
+DROP TRIGGER IF EXISTS update_web_forms_updated_at ON web_forms;
+CREATE TRIGGER update_web_forms_updated_at
+    BEFORE UPDATE ON web_forms
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger oluştur - mobile_forms tablosu için
+DROP TRIGGER IF EXISTS update_mobile_forms_updated_at ON mobile_forms;
+CREATE TRIGGER update_mobile_forms_updated_at
+    BEFORE UPDATE ON mobile_forms
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 

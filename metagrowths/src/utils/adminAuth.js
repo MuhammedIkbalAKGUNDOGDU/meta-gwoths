@@ -29,7 +29,7 @@ export const adminLogout = () => {
 
 // Admin token'ını al
 export const getAdminToken = () => {
-  return "admin_token_123"; // Sabit admin token
+  return localStorage.getItem("admin_token");
 };
 
 // Admin headers oluştur
