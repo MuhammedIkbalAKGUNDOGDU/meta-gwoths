@@ -1,9 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { isAuthenticated, logout } from "../utils/auth";
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const location = useLocation();
+
+  useEffect(() => {
+    setIsLoggedIn(isAuthenticated());
+  }, []);
 
   // Function to determine if a link is active
   const isActive = (path) => {
@@ -53,12 +59,29 @@ const Header = () => {
               <Link to="/iletisim" className={getLinkClasses("/iletisim")}>
                 İletişim
               </Link>
-              <a
-                href="/login"
-                className="bg-gradient-to-r from-blue-600 to-slate-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
-              >
-                Giriş Yap
-              </a>
+              {isLoggedIn ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    className={getLinkClasses("/dashboard")}
+                  >
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={logout}
+                    className="bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
+                  >
+                    Çıkış Yap
+                  </button>
+                </>
+              ) : (
+                <a
+                  href="/login"
+                  className="bg-gradient-to-r from-blue-600 to-slate-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
+                >
+                  Giriş Yap
+                </a>
+              )}
             </div>
           </div>
 

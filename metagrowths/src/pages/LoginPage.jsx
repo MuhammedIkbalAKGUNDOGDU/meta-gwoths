@@ -1,10 +1,14 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import { getApiUrl, getDefaultHeaders, API_ENDPOINTS } from "../config/api";
 
 const LoginPage = () => {
+  const navigate = useNavigate();
   const [isVisible, setIsVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -20,12 +24,69 @@ const LoginPage = () => {
       ...prev,
       [name]: value,
     }));
+    // Clear error when user starts typing
+    if (error) setError("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Login logic here
-    console.log("Login attempt:", formData);
+    setError("");
+    setIsLoading(true);
+
+    try {
+      // API'ye giriş isteği gönder
+      const response = await fetch(getApiUrl(API_ENDPOINTS.login), {
+        method: "POST",
+        headers: getDefaultHeaders(),
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Giriş işlemi başarısız");
+      }
+
+      // Başarılı giriş
+      if (data.status === "success") {
+        // Token ve kullanıcı bilgilerini kaydet
+        localStorage.setItem("metagrowths_token", data.data.token);
+        localStorage.setItem(
+          "metagrowths_user",
+          JSON.stringify(data.data.user)
+        );
+
+        // Anket durumunu kontrol et
+        try {
+          const surveyResponse = await fetch(getApiUrl(API_ENDPOINTS.survey), {
+            method: "GET",
+            headers: getAuthHeaders(data.data.token),
+          });
+
+          if (surveyResponse.ok) {
+            // Anket doldurulmuş, paket seçim sayfasına yönlendir
+            alert("Başarıyla giriş yaptınız! Hoş geldiniz!");
+            navigate("/reklam-paket-secim");
+          } else {
+            // Anket doldurulmamış, anket sayfasına yönlendir
+            alert("Başarıyla giriş yaptınız! Hoş geldiniz!");
+            navigate("/anket");
+          }
+        } catch (error) {
+          // Hata durumunda anket sayfasına yönlendir
+          alert("Başarıyla giriş yaptınız! Hoş geldiniz!");
+          navigate("/anket");
+        }
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      setError(error.message || "Giriş işlemi sırasında bir hata oluştu");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -60,6 +121,13 @@ const LoginPage = () => {
             }`}
           >
             <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-slate-200/50">
+              {/* Error Message */}
+              {error && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-600 text-sm">{error}</p>
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                   <label
@@ -99,21 +167,7 @@ const LoginPage = () => {
                   />
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <input
-                      id="remember-me"
-                      name="remember-me"
-                      type="checkbox"
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300 rounded"
-                    />
-                    <label
-                      htmlFor="remember-me"
-                      className="ml-2 block text-sm text-slate-700"
-                    >
-                      Beni hatırla
-                    </label>
-                  </div>
+                <div className="flex items-center justify-end">
                   <div className="text-sm">
                     <Link
                       to="/forgot-password"
@@ -127,9 +181,16 @@ const LoginPage = () => {
                 <div>
                   <button
                     type="submit"
-                    className="group w-full bg-gradient-to-r from-blue-600 to-slate-700 text-white py-3 px-4 rounded-xl font-medium hover:shadow-2xl transform hover:scale-105 transition-all duration-500 relative overflow-hidden"
+                    disabled={isLoading}
+                    className={`group w-full bg-gradient-to-r from-blue-600 to-slate-700 text-white py-3 px-4 rounded-xl font-medium transition-all duration-500 relative overflow-hidden ${
+                      isLoading
+                        ? "opacity-50 cursor-not-allowed"
+                        : "hover:shadow-2xl transform hover:scale-105"
+                    }`}
                   >
-                    <span className="relative z-10">Giriş Yap</span>
+                    <span className="relative z-10">
+                      {isLoading ? "Giriş Yapılıyor..." : "Giriş Yap"}
+                    </span>
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-slate-600 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                   </button>
                 </div>

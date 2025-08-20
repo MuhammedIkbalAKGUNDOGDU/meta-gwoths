@@ -10,6 +10,10 @@ import ContactPage from "./pages/ContactPage";
 import DashboardPage from "./pages/DashboardPage";
 import ChatPage from "./pages/ChatPage";
 import SurveyPage from "./pages/SurveyPage";
+import AdminLoginPage from "./pages/AdminLoginPage";
+import AdminPanelPage from "./pages/AdminPanelPage";
+import ProtectedRoute from "./components/ProtectedRoute";
+import AdminProtectedRoute from "./components/AdminProtectedRoute";
 
 const AppRouter = () => {
   return (
@@ -22,9 +26,39 @@ const AppRouter = () => {
       <Route path="/hizmetler" element={<ServicesPage />} />
       <Route path="/hakkimizda" element={<AboutPage />} />
       <Route path="/iletisim" element={<ContactPage />} />
-      <Route path="/dashboard" element={<DashboardPage />} />
-      <Route path="/chat" element={<ChatPage />} />
-      <Route path="/anket" element={<SurveyPage />} />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/chat"
+        element={
+          <ProtectedRoute>
+            <ChatPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/anket"
+        element={
+          <ProtectedRoute>
+            <SurveyPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route path="/adminlogin" element={<AdminLoginPage />} />
+      <Route
+        path="/admin"
+        element={
+          <AdminProtectedRoute>
+            <AdminPanelPage />
+          </AdminProtectedRoute>
+        }
+      />
     </Routes>
   );
 };

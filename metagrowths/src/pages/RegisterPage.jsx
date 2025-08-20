@@ -1,10 +1,14 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import { getApiUrl, getDefaultHeaders, API_ENDPOINTS } from "../config/api";
 
 const RegisterPage = () => {
+  const navigate = useNavigate();
   const [isVisible, setIsVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -25,12 +29,78 @@ const RegisterPage = () => {
       ...prev,
       [name]: value,
     }));
+    // Clear error when user starts typing
+    if (error) setError("");
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Registration logic here
-    console.log("Registration attempt:", formData);
+    setError("");
+    setIsLoading(true);
+
+    try {
+      // Şifre kontrolü
+      if (formData.password !== formData.confirmPassword) {
+        setError("Şifreler eşleşmiyor");
+        setIsLoading(false);
+        return;
+      }
+
+      // API'ye kayıt isteği gönder
+      const response = await fetch(getApiUrl(API_ENDPOINTS.register), {
+        method: "POST",
+        headers: getDefaultHeaders(),
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          password: formData.password,
+          confirmPassword: formData.confirmPassword,
+          company: formData.company,
+          phone: formData.phone,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        // Şifre hatalarını özel olarak handle et
+        if (data.message && data.message.includes("Şifre gereksinimleri")) {
+          throw new Error(
+            "Şifre gereksinimleri karşılanmıyor. Lütfen şifrenizin en az 6 karakter olduğundan, bir büyük harf, bir küçük harf ve bir rakam içerdiğinden emin olun."
+          );
+        }
+
+        // Diğer validation hatalarını handle et
+        if (data.errors && data.errors.length > 0) {
+          const errorMessages = data.errors
+            .map((err) => err.message)
+            .join(", ");
+          throw new Error(errorMessages);
+        }
+
+        throw new Error(data.message || "Kayıt işlemi başarısız");
+      }
+
+      // Başarılı kayıt
+      if (data.status === "success") {
+        // Token ve kullanıcı bilgilerini kaydet
+        localStorage.setItem("metagrowths_token", data.data.token);
+        localStorage.setItem(
+          "metagrowths_user",
+          JSON.stringify(data.data.user)
+        );
+
+        // Başarı mesajı göster ve anket sayfasına yönlendir
+        alert("Hesabınız başarıyla oluşturuldu! Hoş geldiniz!");
+        navigate("/anket");
+      }
+    } catch (error) {
+      console.error("Registration error:", error);
+      setError(error.message || "Kayıt işlemi sırasında bir hata oluştu");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -66,6 +136,13 @@ const RegisterPage = () => {
             }`}
           >
             <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-slate-200/50">
+              {/* Error Message */}
+              {error && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-600 text-sm">{error}</p>
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -178,6 +255,54 @@ const RegisterPage = () => {
                     className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 bg-white/50 backdrop-blur-sm"
                     placeholder="••••••••"
                   />
+                  {/* Şifre gereksinimleri */}
+                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800 font-medium mb-2">
+                      Şifre gereksinimleri:
+                    </p>
+                    <ul className="text-xs text-blue-700 space-y-1">
+                      <li className="flex items-center">
+                        <span
+                          className={`w-2 h-2 rounded-full mr-2 ${
+                            formData.password.length >= 6
+                              ? "bg-green-500"
+                              : "bg-gray-300"
+                          }`}
+                        ></span>
+                        En az 6 karakter
+                      </li>
+                      <li className="flex items-center">
+                        <span
+                          className={`w-2 h-2 rounded-full mr-2 ${
+                            /[a-z]/.test(formData.password)
+                              ? "bg-green-500"
+                              : "bg-gray-300"
+                          }`}
+                        ></span>
+                        En az bir küçük harf (a-z)
+                      </li>
+                      <li className="flex items-center">
+                        <span
+                          className={`w-2 h-2 rounded-full mr-2 ${
+                            /[A-Z]/.test(formData.password)
+                              ? "bg-green-500"
+                              : "bg-gray-300"
+                          }`}
+                        ></span>
+                        En az bir büyük harf (A-Z)
+                      </li>
+                      <li className="flex items-center">
+                        <span
+                          className={`w-2 h-2 rounded-full mr-2 ${
+                            /\d/.test(formData.password)
+                              ? "bg-green-500"
+                              : "bg-gray-300"
+                          }`}
+                        ></span>
+                        En az bir rakam (0-9)
+                      </li>
+                    </ul>
+                  </div>
                 </div>
 
                 <div>
@@ -194,9 +319,53 @@ const RegisterPage = () => {
                     value={formData.confirmPassword}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 bg-white/50 backdrop-blur-sm"
+                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300 bg-white/50 backdrop-blur-sm ${
+                      formData.confirmPassword &&
+                      formData.password !== formData.confirmPassword
+                        ? "border-red-300 focus:ring-red-500"
+                        : formData.confirmPassword &&
+                          formData.password === formData.confirmPassword
+                        ? "border-green-300 focus:ring-green-500"
+                        : "border-slate-300"
+                    }`}
                     placeholder="••••••••"
                   />
+                  {/* Şifre eşleşme kontrolü */}
+                  {formData.confirmPassword && (
+                    <div className="mt-2 p-2 rounded-lg text-sm">
+                      {formData.password === formData.confirmPassword ? (
+                        <div className="flex items-center text-green-700">
+                          <svg
+                            className="w-4 h-4 mr-2"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          Şifreler eşleşiyor
+                        </div>
+                      ) : (
+                        <div className="flex items-center text-red-700">
+                          <svg
+                            className="w-4 h-4 mr-2"
+                            fill="currentColor"
+                            viewBox="0 0 20 20"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          Şifreler eşleşmiyor
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center">
@@ -233,9 +402,16 @@ const RegisterPage = () => {
                 <div>
                   <button
                     type="submit"
-                    className="group w-full bg-gradient-to-r from-blue-600 to-slate-700 text-white py-3 px-4 rounded-xl font-medium hover:shadow-2xl transform hover:scale-105 transition-all duration-500 relative overflow-hidden"
+                    disabled={isLoading}
+                    className={`group w-full bg-gradient-to-r from-blue-600 to-slate-700 text-white py-3 px-4 rounded-xl font-medium transition-all duration-500 relative overflow-hidden ${
+                      isLoading
+                        ? "opacity-50 cursor-not-allowed"
+                        : "hover:shadow-2xl transform hover:scale-105"
+                    }`}
                   >
-                    <span className="relative z-10">Hesap Oluştur</span>
+                    <span className="relative z-10">
+                      {isLoading ? "Hesap Oluşturuluyor..." : "Hesap Oluştur"}
+                    </span>
                     <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-slate-600 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
                   </button>
                 </div>

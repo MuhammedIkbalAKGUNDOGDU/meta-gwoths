@@ -3,6 +3,12 @@ import { Link } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import ContactModal from "../components/ContactModal";
+import {
+  getApiUrl,
+  getDefaultHeaders,
+  getAuthHeaders,
+  API_ENDPOINTS,
+} from "../config/api";
 
 const LandingPage = () => {
   const [isVisible, setIsVisible] = useState(false);
@@ -114,38 +120,80 @@ const LandingPage = () => {
 
   const handleWebFormSubmit = async (e) => {
     e.preventDefault();
-    // Burada form verilerini API'ye gönderme işlemi yapılacak
-    console.log("Web Development Form Data:", webFormData);
-    alert(
-      "Web geliştirme formunuz başarıyla gönderildi! En kısa sürede size dönüş yapacağız."
-    );
-    setWebFormData({
-      name: "",
-      surname: "",
-      email: "",
-      phone: "",
-      projectDescription: "",
-      budget: "",
-    });
-    setIsWebFormOpen(false);
+
+    try {
+      // Token varsa kullan, yoksa normal gönder
+      const token = localStorage.getItem("metagrowths_token");
+      const headers = token ? getAuthHeaders(token) : getDefaultHeaders();
+
+      const response = await fetch(getApiUrl(API_ENDPOINTS.webForm), {
+        method: "POST",
+        headers,
+        body: JSON.stringify(webFormData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Form gönderimi başarısız");
+      }
+
+      alert(
+        "Web geliştirme formunuz başarıyla gönderildi! En kısa sürede size dönüş yapacağız."
+      );
+
+      setWebFormData({
+        name: "",
+        surname: "",
+        email: "",
+        phone: "",
+        projectDescription: "",
+        budget: "",
+      });
+      setIsWebFormOpen(false);
+    } catch (error) {
+      console.error("Web form submission error:", error);
+      alert("Form gönderimi sırasında bir hata oluştu. Lütfen tekrar deneyin.");
+    }
   };
 
   const handleMobileFormSubmit = async (e) => {
     e.preventDefault();
-    // Burada form verilerini API'ye gönderme işlemi yapılacak
-    console.log("Mobile App Form Data:", mobileFormData);
-    alert(
-      "Mobil uygulama formunuz başarıyla gönderildi! En kısa sürede size dönüş yapacağız."
-    );
-    setMobileFormData({
-      name: "",
-      surname: "",
-      email: "",
-      phone: "",
-      projectDescription: "",
-      budget: "",
-    });
-    setIsMobileFormOpen(false);
+
+    try {
+      // Token varsa kullan, yoksa normal gönder
+      const token = localStorage.getItem("metagrowths_token");
+      const headers = token ? getAuthHeaders(token) : getDefaultHeaders();
+
+      const response = await fetch(getApiUrl(API_ENDPOINTS.mobileForm), {
+        method: "POST",
+        headers,
+        body: JSON.stringify(mobileFormData),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Form gönderimi başarısız");
+      }
+
+      alert(
+        "Mobil uygulama formunuz başarıyla gönderildi! En kısa sürede size dönüş yapacağız."
+      );
+
+      setMobileFormData({
+        name: "",
+        surname: "",
+        email: "",
+        phone: "",
+        projectDescription: "",
+        budget: "",
+      });
+      setIsMobileFormOpen(false);
+    } catch (error) {
+      console.error("Mobile form submission error:", error);
+      alert("Form gönderimi sırasında bir hata oluştu. Lütfen tekrar deneyin.");
+    }
   };
 
   return (

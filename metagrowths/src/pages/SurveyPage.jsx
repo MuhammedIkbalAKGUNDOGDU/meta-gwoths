@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { getApiUrl, getAuthHeaders, API_ENDPOINTS } from "../config/api";
+import { isAuthenticated } from "../utils/auth";
 
 const SurveyPage = () => {
   const navigate = useNavigate();
@@ -9,6 +11,7 @@ const SurveyPage = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAnswers, setShowAnswers] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const questions = [
     {
@@ -218,7 +221,41 @@ const SurveyPage = () => {
 
   useEffect(() => {
     setIsVisible(true);
+    checkSurveyStatus();
   }, []);
+
+  const checkSurveyStatus = async () => {
+    try {
+      if (!isAuthenticated()) {
+        navigate("/login");
+        return;
+      }
+
+      const token = localStorage.getItem("metagrowths_token");
+
+      const response = await fetch(getApiUrl(API_ENDPOINTS.survey), {
+        method: "GET",
+        headers: getAuthHeaders(token),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.data.survey.is_completed) {
+          // Anket zaten doldurulmuş, dashboard'a yönlendir
+          alert(
+            "Anketiniz zaten doldurulmuş! Dashboard'a yönlendiriliyorsunuz."
+          );
+          navigate("/dashboard");
+          return;
+        }
+      }
+    } catch (error) {
+      console.error("Survey status check error:", error);
+      // Hata durumunda anket sayfasını göster
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     setIsVisible(false);
@@ -248,11 +285,39 @@ const SurveyPage = () => {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    // Burada API'ye gönderme işlemi yapılacak
-    setTimeout(() => {
+
+    try {
+      if (!isAuthenticated()) {
+        throw new Error("Oturum bulunamadı. Lütfen tekrar giriş yapın.");
+      }
+
+      const token = localStorage.getItem("metagrowths_token");
+
+      const response = await fetch(getApiUrl(API_ENDPOINTS.survey), {
+        method: "POST",
+        headers: getAuthHeaders(token),
+        body: JSON.stringify({
+          answers: answers,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Anket tamamlama başarısız");
+      }
+
+      // Başarılı gönderim
+      alert(
+        "Anket cevaplarınız başarıyla kaydedildi! Paket seçim sayfasına yönlendiriliyorsunuz."
+      );
+      navigate("/reklam-paket-secim");
+    } catch (error) {
+      console.error("Survey submission error:", error);
+      alert(error.message || "Anket gönderimi sırasında bir hata oluştu");
+    } finally {
       setIsSubmitting(false);
-      navigate("/dashboard");
-    }, 2000);
+    }
   };
 
   const renderQuestion = (question) => {
@@ -563,6 +628,20 @@ const SurveyPage = () => {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Loading durumunda spinner göster
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 pt-16">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-slate-600">Anket durumu kontrol ediliyor...</p>
           </div>
         </div>
       </div>

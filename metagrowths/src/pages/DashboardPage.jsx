@@ -1,16 +1,51 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import { getApiUrl, getAuthHeaders, API_ENDPOINTS } from "../config/api";
+import { isAuthenticated } from "../utils/auth";
 
 const DashboardPage = () => {
+  const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [isResizing, setIsResizing] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [hasSurvey, setHasSurvey] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     setIsVisible(true);
+    checkSurveyStatus();
   }, []);
+
+  const checkSurveyStatus = async () => {
+    try {
+      if (!isAuthenticated()) {
+        navigate("/login");
+        return;
+      }
+
+      const token = localStorage.getItem("metagrowths_token");
+
+      const response = await fetch(getApiUrl(API_ENDPOINTS.survey), {
+        method: "GET",
+        headers: getAuthHeaders(token),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setHasSurvey(data.data.survey.is_completed);
+      } else if (response.status === 404) {
+        setHasSurvey(false);
+      }
+    } catch (error) {
+      console.error("Survey status check error:", error);
+      setHasSurvey(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSidebarToggle = () => {
     setIsSidebarOpen(!isSidebarOpen);
@@ -224,6 +259,50 @@ const DashboardPage = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Survey Status */}
+              {!isLoading && (
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
+                  <h3 className="text-sm font-semibold text-slate-800 mb-3">
+                    Anket Durumu
+                  </h3>
+                  <div className="space-y-3">
+                    {hasSurvey ? (
+                      <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                        <div>
+                          <p className="text-sm font-medium text-green-800">
+                            Anket Tamamlandı
+                          </p>
+                          <p className="text-xs text-green-600">
+                            Analiz sürecinde
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                        <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                        <div>
+                          <p className="text-sm font-medium text-orange-800">
+                            Anket Bekliyor
+                          </p>
+                          <p className="text-xs text-orange-600">
+                            Henüz doldurmadınız
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {!hasSurvey && (
+                      <button
+                        onClick={() => navigate("/survey")}
+                        className="w-full p-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                      >
+                        Anketi Doldur
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Quick Actions */}
               <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
