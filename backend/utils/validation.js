@@ -87,7 +87,8 @@ const webFormValidation = [
     .withMessage("Proje açıklaması en az 10, en fazla 1000 karakter olmalıdır"),
 
   body("budget")
-    .optional()
+    .notEmpty()
+    .withMessage("Bütçe aralığı seçimi zorunludur")
     .isIn(["5k-15k", "15k-30k", "30k-50k", "50k-100k", "100k+"])
     .withMessage("Geçerli bir bütçe aralığı seçiniz"),
 ];
@@ -120,7 +121,8 @@ const mobileFormValidation = [
     .withMessage("Proje açıklaması en az 10, en fazla 1000 karakter olmalıdır"),
 
   body("budget")
-    .optional()
+    .notEmpty()
+    .withMessage("Bütçe aralığı seçimi zorunludur")
     .isIn(["15k-30k", "30k-50k", "50k-100k", "100k-200k", "200k+"])
     .withMessage("Geçerli bir bütçe aralığı seçiniz"),
 ];

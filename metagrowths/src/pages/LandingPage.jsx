@@ -135,7 +135,16 @@ const LandingPage = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Form gönderimi başarısız");
+        // Validation hatalarını göster
+        if (data.errors && data.errors.length > 0) {
+          const errorMessages = data.errors
+            .map((err) => `${err.field}: ${err.message}`)
+            .join("\n");
+          alert(`Form hataları:\n${errorMessages}`);
+        } else {
+          throw new Error(data.message || "Form gönderimi başarısız");
+        }
+        return;
       }
 
       alert(
@@ -174,7 +183,16 @@ const LandingPage = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Form gönderimi başarısız");
+        // Validation hatalarını göster
+        if (data.errors && data.errors.length > 0) {
+          const errorMessages = data.errors
+            .map((err) => `${err.field}: ${err.message}`)
+            .join("\n");
+          alert(`Form hataları:\n${errorMessages}`);
+        } else {
+          throw new Error(data.message || "Form gönderimi başarısız");
+        }
+        return;
       }
 
       alert(
@@ -1026,9 +1044,10 @@ const LandingPage = () => {
 
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Tahmini Bütçe
+                    Tahmini Bütçe *
                   </label>
                   <select
+                    required
                     value={webFormData.budget}
                     onChange={(e) =>
                       setWebFormData({ ...webFormData, budget: e.target.value })
@@ -1198,9 +1217,10 @@ const LandingPage = () => {
 
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    Tahmini Bütçe
+                    Tahmini Bütçe *
                   </label>
                   <select
+                    required
                     value={mobileFormData.budget}
                     onChange={(e) =>
                       setMobileFormData({
