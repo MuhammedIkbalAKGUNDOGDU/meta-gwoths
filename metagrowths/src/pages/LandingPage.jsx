@@ -11,6 +11,8 @@ const LandingPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isWebFormOpen, setIsWebFormOpen] = useState(false);
   const [isMobileFormOpen, setIsMobileFormOpen] = useState(false);
+  const [isWebFormClosing, setIsWebFormClosing] = useState(false);
+  const [isMobileFormClosing, setIsMobileFormClosing] = useState(false);
   const [webFormData, setWebFormData] = useState({
     name: "",
     surname: "",
@@ -91,7 +93,11 @@ const LandingPage = () => {
   };
 
   const handleWebFormClose = () => {
-    setIsWebFormOpen(false);
+    setIsWebFormClosing(true);
+    setTimeout(() => {
+      setIsWebFormOpen(false);
+      setIsWebFormClosing(false);
+    }, 300);
   };
 
   const handleMobileFormOpen = () => {
@@ -99,7 +105,11 @@ const LandingPage = () => {
   };
 
   const handleMobileFormClose = () => {
-    setIsMobileFormOpen(false);
+    setIsMobileFormClosing(true);
+    setTimeout(() => {
+      setIsMobileFormOpen(false);
+      setIsMobileFormClosing(false);
+    }, 300);
   };
 
   const handleWebFormSubmit = async (e) => {
@@ -841,7 +851,7 @@ const LandingPage = () => {
              {/* Web Development Form Modal */}
        {isWebFormOpen && (
          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slideIn">
+           <div className={`bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto ${isWebFormClosing ? 'animate-slideOut' : 'animate-slideIn'}`}>
             <div className="p-8">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold text-slate-800">
@@ -1003,10 +1013,10 @@ const LandingPage = () => {
         </div>
       )}
 
-      {/* Mobile App Form Modal */}
-      {isMobileFormOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+             {/* Mobile App Form Modal */}
+       {isMobileFormOpen && (
+         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 animate-fadeIn">
+           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-slideIn">
             <div className="p-8">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold text-slate-800">
