@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import InfoModal from "../components/InfoModal";
 import { getApiUrl, getDefaultHeaders, API_ENDPOINTS } from "../config/api";
 
 const LoginPage = () => {
@@ -12,6 +13,13 @@ const LoginPage = () => {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
+  });
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [modalInfo, setModalInfo] = useState({
+    title: "",
+    message: "",
+    type: "info",
+    redirectPath: "",
   });
 
   useEffect(() => {
@@ -26,6 +34,15 @@ const LoginPage = () => {
     }));
     // Clear error when user starts typing
     if (error) setError("");
+  };
+
+  const handleModalClose = () => {
+    setShowInfoModal(false);
+  };
+
+  const handleModalContinue = () => {
+    setShowInfoModal(false);
+    navigate(modalInfo.redirectPath);
   };
 
   const handleSubmit = async (e) => {
@@ -59,26 +76,45 @@ const LoginPage = () => {
           JSON.stringify(data.data.user)
         );
 
-        // Anket durumunu kontrol et
-        try {
-          const surveyResponse = await fetch(getApiUrl(API_ENDPOINTS.survey), {
-            method: "GET",
-            headers: getAuthHeaders(data.data.token),
-          });
+        // Kullanıcı bilgilerini user_info olarak da kaydet (diğer sayfalar için)
+        localStorage.setItem("user_info", JSON.stringify(data.data.user));
 
-          if (surveyResponse.ok) {
-            // Anket doldurulmuş, paket seçim sayfasına yönlendir
-            alert("Başarıyla giriş yaptınız! Hoş geldiniz!");
-            navigate("/reklam-paket-secim");
-          } else {
-            // Anket doldurulmamış, anket sayfasına yönlendir
-            alert("Başarıyla giriş yaptınız! Hoş geldiniz!");
-            navigate("/anket");
-          }
-        } catch (error) {
-          // Hata durumunda anket sayfasına yönlendir
-          alert("Başarıyla giriş yaptınız! Hoş geldiniz!");
-          navigate("/anket");
+        console.log(
+          "✅ Giriş başarılı! Kullanıcı bilgileri kaydedildi:",
+          data.data.user
+        );
+
+        // Backend'den gelen survey_completed bilgisini kullan
+        const surveyCompleted = data.data.survey_completed;
+
+        console.log("📊 Anket Durumu:", {
+          user: `${data.data.user.first_name} ${data.data.user.last_name}`,
+          customer_id: data.data.user.customer_id,
+          survey_completed: surveyCompleted,
+          message: surveyCompleted
+            ? "Anket tamamlanmış"
+            : "Anket tamamlanmamış",
+        });
+
+        // Anket durumuna göre modal göster ve yönlendirme yap
+        if (surveyCompleted) {
+          // Anket doldurulmuş, paket seçim sayfasına yönlendir
+          setModalInfo({
+            title: "Hoş Geldiniz! 🎉",
+            message: "Anketiniz zaten tamamlanmış. Şimdi size uygun reklam paketini seçebilirsiniz.",
+            type: "success",
+            redirectPath: "/reklam-paket-secim",
+          });
+          setShowInfoModal(true);
+        } else {
+          // Anket doldurulmamış, anket sayfasına yönlendir
+          setModalInfo({
+            title: "Hoş Geldiniz! 📋",
+            message: "Devam etmek için lütfen kısa bir anket doldurun. Bu sayede size en uygun hizmeti sunabiliriz.",
+            type: "info",
+            redirectPath: "/anket",
+          });
+          setShowInfoModal(true);
         }
       }
     } catch (error) {
@@ -218,6 +254,17 @@ const LoginPage = () => {
       </section>
 
       <Footer />
+
+      {/* Info Modal */}
+      <InfoModal
+        isOpen={showInfoModal}
+        onClose={handleModalClose}
+        title={modalInfo.title}
+        message={modalInfo.message}
+        type={modalInfo.type}
+        buttonText="Devam Et"
+        onButtonClick={handleModalContinue}
+      />
     </div>
   );
 };

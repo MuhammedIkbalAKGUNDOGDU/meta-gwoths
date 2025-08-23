@@ -63,6 +63,22 @@ CREATE TABLE IF NOT EXISTS survey_status (
     UNIQUE(customer_id)
 );
 
+-- Subscriptions tablosu - Abonelik bilgileri
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES users(customer_id) ON DELETE CASCADE,
+    package_name VARCHAR(100) NOT NULL,
+    package_details JSONB NOT NULL,
+    subscription_status VARCHAR(20) DEFAULT 'active' CHECK (subscription_status IN ('active', 'expired', 'cancelled', 'suspended')),
+    start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    end_date TIMESTAMP NOT NULL,
+    auto_renew BOOLEAN DEFAULT false,
+    payment_status VARCHAR(20) DEFAULT 'paid' CHECK (payment_status IN ('paid', 'pending', 'failed', 'refunded')),
+    total_amount DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes oluştur - Performans için
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_customer_id ON users(customer_id);
@@ -72,6 +88,8 @@ CREATE INDEX IF NOT EXISTS idx_mobile_forms_customer_id ON mobile_forms(customer
 CREATE INDEX IF NOT EXISTS idx_mobile_forms_created_at ON mobile_forms(created_at);
 CREATE INDEX IF NOT EXISTS idx_survey_status_customer_id ON survey_status(customer_id);
 CREATE INDEX IF NOT EXISTS idx_survey_status_is_completed ON survey_status(is_completed);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_customer_id ON subscriptions(customer_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(subscription_status);
 
 -- Trigger function - updated_at alanını otomatik güncelle
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -107,6 +125,13 @@ CREATE TRIGGER update_web_forms_updated_at
 DROP TRIGGER IF EXISTS update_mobile_forms_updated_at ON mobile_forms;
 CREATE TRIGGER update_mobile_forms_updated_at
     BEFORE UPDATE ON mobile_forms
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger oluştur - subscriptions tablosu için
+DROP TRIGGER IF EXISTS update_subscriptions_updated_at ON subscriptions;
+CREATE TRIGGER update_subscriptions_updated_at
+    BEFORE UPDATE ON subscriptions
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 

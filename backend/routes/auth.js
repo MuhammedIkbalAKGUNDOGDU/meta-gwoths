@@ -139,6 +139,15 @@ router.post(
         });
       }
 
+      // Check survey status for the user
+      const surveyResult = await query(
+        "SELECT is_completed FROM survey_status WHERE customer_id = $1",
+        [user.customer_id]
+      );
+
+      const hasCompletedSurvey =
+        surveyResult.rows.length > 0 && surveyResult.rows[0].is_completed;
+
       // Generate JWT token
       const token = jwt.sign(
         { customer_id: user.customer_id },
@@ -159,6 +168,7 @@ router.post(
             phone: user.phone,
           },
           token,
+          survey_completed: hasCompletedSurvey,
         },
       });
     } catch (error) {
@@ -705,5 +715,80 @@ router.put(
     }
   }
 );
+
+// @route   POST /api/auth/subscription
+// @desc    Create new subscription
+// @access  Private
+router.post("/subscription", authenticateToken, async (req, res) => {
+  try {
+    const { package_name, package_details, total_amount } = req.body;
+    const customerId = req.user.customer_id;
+
+    // Calculate end date (1 month from now)
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + 1);
+
+    const result = await query(
+      `INSERT INTO subscriptions (customer_id, package_name, package_details, end_date, total_amount)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [
+        customerId,
+        package_name,
+        JSON.stringify(package_details),
+        endDate,
+        total_amount,
+      ]
+    );
+
+    res.status(201).json({
+      status: "success",
+      message: "Abonelik başarıyla oluşturuldu",
+      data: {
+        subscription: result.rows[0],
+      },
+    });
+  } catch (error) {
+    console.error("Subscription creation error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Abonelik oluşturulurken bir hata oluştu",
+    });
+  }
+});
+
+// @route   GET /api/auth/subscription
+// @desc    Get user's subscription
+// @access  Private
+router.get("/subscription", authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.customer_id;
+
+    const result = await query(
+      `SELECT * FROM subscriptions WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [customerId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Henüz abonelik bulunmuyor",
+      });
+    }
+
+    res.json({
+      status: "success",
+      data: {
+        subscription: result.rows[0],
+      },
+    });
+  } catch (error) {
+    console.error("Subscription retrieval error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Abonelik bilgileri alınırken bir hata oluştu",
+    });
+  }
+});
 
 module.exports = router;

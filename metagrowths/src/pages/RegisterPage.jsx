@@ -91,6 +91,14 @@ const RegisterPage = () => {
           JSON.stringify(data.data.user)
         );
 
+        // Kullanıcı bilgilerini user_info olarak da kaydet (diğer sayfalar için)
+        localStorage.setItem("user_info", JSON.stringify(data.data.user));
+
+        console.log(
+          "✅ Kayıt başarılı! Kullanıcı bilgileri kaydedildi:",
+          data.data.user
+        );
+
         // Başarı mesajı göster ve anket sayfasına yönlendir
         alert("Hesabınız başarıyla oluşturuldu! Hoş geldiniz!");
         navigate("/anket");

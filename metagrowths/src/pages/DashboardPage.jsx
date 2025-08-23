@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { getApiUrl, getAuthHeaders, API_ENDPOINTS } from "../config/api";
-import { isAuthenticated } from "../utils/auth";
 
 const DashboardPage = () => {
   const navigate = useNavigate();
@@ -12,39 +11,191 @@ const DashboardPage = () => {
   const [isResizing, setIsResizing] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const [hasSurvey, setHasSurvey] = useState(false);
+  const [hasSubscription, setHasSubscription] = useState(false);
+  const [subscription, setSubscription] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     setIsVisible(true);
     checkSurveyStatus();
+    checkSubscriptionStatus();
   }, []);
 
   const checkSurveyStatus = async () => {
-    try {
-      if (!isAuthenticated()) {
-        navigate("/login");
-        return;
+    // Giriş yapan kişinin bilgilerini localStorage'dan al
+    const userInfo = localStorage.getItem("user_info");
+    const token = localStorage.getItem("metagrowths_token");
+    let currentUser = null;
+
+    if (userInfo) {
+      try {
+        currentUser = JSON.parse(userInfo);
+      } catch (error) {
+        console.error("Kullanıcı bilgileri parse edilemedi:", error);
       }
+    }
 
-      const token = localStorage.getItem("metagrowths_token");
+    // Eğer kullanıcı bilgisi yoksa simüle edilmiş kullanıcı kullan
+    if (!currentUser) {
+      currentUser = {
+        customer_id: 123,
+        name: "Ahmet Yılmaz",
+        email: "ahmet@example.com",
+      };
+      console.warn(
+        "⚠️ Kullanıcı bilgileri bulunamadı, simüle edilmiş kullanıcı kullanılıyor"
+      );
+    }
 
-      const response = await fetch(getApiUrl(API_ENDPOINTS.survey), {
-        method: "GET",
-        headers: getAuthHeaders(token),
-      });
+    console.log("Anket durumu kontrol ediliyor...");
+    console.log("👤 Giriş Yapan Kullanıcı:", currentUser);
 
-      if (response.ok) {
-        const data = await response.json();
-        setHasSurvey(data.data.survey.is_completed);
-      } else if (response.status === 404) {
+    // Gerçek API isteği yap
+    if (token) {
+      try {
+        const response = await fetch(getApiUrl(API_ENDPOINTS.survey), {
+          method: "GET",
+          headers: getAuthHeaders(token),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const surveyCompleted = data.data.survey.is_completed;
+
+          console.log("📊 Dashboard - Anket Durumu Sonucu (API):", {
+            user: `${currentUser.first_name} ${currentUser.last_name}`,
+            customer_id: currentUser.customer_id,
+            email: currentUser.email,
+            surveyCompleted: surveyCompleted,
+            message: surveyCompleted
+              ? "Anket tamamlanmış"
+              : "Anket tamamlanmamış",
+          });
+
+          setHasSurvey(surveyCompleted);
+        } else {
+          console.log("📊 Dashboard - Anket Durumu Sonucu (API 404):", {
+            user: `${currentUser.first_name} ${currentUser.last_name}`,
+            customer_id: currentUser.customer_id,
+            email: currentUser.email,
+            surveyCompleted: false,
+            message: "Anket bulunamadı (henüz doldurulmamış)",
+          });
+          setHasSurvey(false);
+        }
+      } catch (error) {
+        console.error("API isteği hatası:", error);
+        console.log("📊 Dashboard - Anket Durumu Sonucu (Hata):", {
+          user: `${currentUser.first_name} ${currentUser.last_name}`,
+          customer_id: currentUser.customer_id,
+          email: currentUser.email,
+          surveyCompleted: false,
+          message: "API hatası - anket doldurulmamış varsayılıyor",
+        });
         setHasSurvey(false);
       }
-    } catch (error) {
-      console.error("Survey status check error:", error);
+    } else {
+      console.log("📊 Dashboard - Anket Durumu Sonucu (Token Yok):", {
+        user: `${currentUser.first_name} ${currentUser.last_name}`,
+        customer_id: currentUser.customer_id,
+        email: currentUser.email,
+        surveyCompleted: false,
+        message: "Token bulunamadı - anket doldurulmamış varsayılıyor",
+      });
       setHasSurvey(false);
-    } finally {
-      setIsLoading(false);
     }
+  };
+
+  const checkSubscriptionStatus = async () => {
+    // Giriş yapan kişinin bilgilerini localStorage'dan al
+    const userInfo = localStorage.getItem("user_info");
+    const token = localStorage.getItem("metagrowths_token");
+    let currentUser = null;
+
+    if (userInfo) {
+      try {
+        currentUser = JSON.parse(userInfo);
+      } catch (error) {
+        console.error("Kullanıcı bilgileri parse edilemedi:", error);
+      }
+    }
+
+    // Eğer kullanıcı bilgisi yoksa simüle edilmiş kullanıcı kullan
+    if (!currentUser) {
+      currentUser = {
+        customer_id: 123,
+        name: "Ahmet Yılmaz",
+        email: "ahmet@example.com",
+      };
+      console.warn(
+        "⚠️ Kullanıcı bilgileri bulunamadı, simüle edilmiş kullanıcı kullanılıyor"
+      );
+    }
+
+    console.log("Abonelik durumu kontrol ediliyor...");
+    console.log("👤 Giriş Yapan Kullanıcı:", currentUser);
+
+    // Gerçek API isteği yap
+    if (token) {
+      try {
+        const response = await fetch("/api/auth/subscription", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const hasActiveSubscription = true;
+
+          console.log("💳 Dashboard - Abonelik Durumu Sonucu (API):", {
+            user: `${currentUser.first_name} ${currentUser.last_name}`,
+            customer_id: currentUser.customer_id,
+            email: currentUser.email,
+            hasActiveSubscription: hasActiveSubscription,
+            message: "Aktif abonelik var",
+          });
+
+          setHasSubscription(hasActiveSubscription);
+          setSubscription(data.data.subscription);
+        } else if (response.status === 404) {
+          console.log("💳 Dashboard - Abonelik Durumu Sonucu (API 404):", {
+            user: `${currentUser.first_name} ${currentUser.last_name}`,
+            customer_id: currentUser.customer_id,
+            email: currentUser.email,
+            hasActiveSubscription: false,
+            message: "Abonelik bulunamadı (henüz seçilmemiş)",
+          });
+          setHasSubscription(false);
+          setSubscription(null);
+        }
+      } catch (error) {
+        console.error("API isteği hatası:", error);
+        console.log("💳 Dashboard - Abonelik Durumu Sonucu (Hata):", {
+          user: `${currentUser.first_name} ${currentUser.last_name}`,
+          customer_id: currentUser.customer_id,
+          email: currentUser.email,
+          hasActiveSubscription: false,
+          message: "API hatası - abonelik yok varsayılıyor",
+        });
+        setHasSubscription(false);
+        setSubscription(null);
+      }
+    } else {
+      console.log("💳 Dashboard - Abonelik Durumu Sonucu (Token Yok):", {
+        user: `${currentUser.first_name} ${currentUser.last_name}`,
+        customer_id: currentUser.customer_id,
+        email: currentUser.email,
+        hasActiveSubscription: false,
+        message: "Token bulunamadı - abonelik yok varsayılıyor",
+      });
+      setHasSubscription(false);
+      setSubscription(null);
+    }
+
+    setIsLoading(false);
   };
 
   const handleSidebarToggle = () => {
@@ -107,64 +258,22 @@ const DashboardPage = () => {
       id: 4,
       name: "Çalışma Alanı 4",
       capacity: 4,
-      occupants: 4,
-      status: "full",
+      occupants: 2,
+      status: "active",
     },
     {
       id: 5,
       name: "Çalışma Alanı 5",
       capacity: 4,
-      occupants: 4,
-      status: "full",
+      occupants: 0,
+      status: "empty",
     },
     {
       id: 6,
       name: "Çalışma Alanı 6",
       capacity: 4,
-      occupants: 4,
-      status: "full",
-    },
-    {
-      id: 7,
-      name: "Çalışma Alanı 7",
-      capacity: 4,
-      occupants: 4,
-      status: "full",
-    },
-    {
-      id: 8,
-      name: "Çalışma Alanı 8",
-      capacity: 4,
-      occupants: 4,
-      status: "full",
-    },
-    {
-      id: 9,
-      name: "Çalışma Alanı 9",
-      capacity: 4,
-      occupants: 4,
-      status: "full",
-    },
-    {
-      id: 10,
-      name: "Çalışma Alanı 10",
-      capacity: 4,
-      occupants: 4,
-      status: "full",
-    },
-    {
-      id: 11,
-      name: "Çalışma Alanı 11",
-      capacity: 4,
-      occupants: 4,
-      status: "full",
-    },
-    {
-      id: 12,
-      name: "Çalışma Alanı 12",
-      capacity: 4,
-      occupants: 4,
-      status: "full",
+      occupants: 1,
+      status: "available",
     },
   ];
 
@@ -200,6 +309,7 @@ const DashboardPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+      <Header />
       <div className="flex h-screen pt-16">
         {/* Sidebar */}
         <div
@@ -266,41 +376,67 @@ const DashboardPage = () => {
                   <h3 className="text-sm font-semibold text-slate-800 mb-3">
                     Anket Durumu
                   </h3>
-                  <div className="space-y-3">
-                    {hasSurvey ? (
-                      <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg border border-green-200">
-                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                        <div>
-                          <p className="text-sm font-medium text-green-800">
-                            Anket Tamamlandı
-                          </p>
-                          <p className="text-xs text-green-600">
-                            Analiz sürecinde
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center space-x-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
-                        <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                        <div>
-                          <p className="text-sm font-medium text-orange-800">
-                            Anket Bekliyor
-                          </p>
-                          <p className="text-xs text-orange-600">
-                            Henüz doldurmadınız
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    {!hasSurvey && (
-                      <button
-                        onClick={() => navigate("/survey")}
-                        className="w-full p-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-                      >
-                        Anketi Doldur
-                      </button>
-                    )}
+                  <div className="flex items-center">
+                    <div
+                      className={`w-3 h-3 rounded-full mr-3 ${
+                        hasSurvey ? "bg-green-500" : "bg-red-500"
+                      }`}
+                    ></div>
+                    <span className="text-sm text-slate-600">
+                      {hasSurvey ? "Anket Tamamlandı" : "Anket Tamamlanmadı"}
+                    </span>
                   </div>
+                  {!hasSurvey && (
+                    <button
+                      onClick={() => navigate("/anket")}
+                      className="mt-3 w-full bg-blue-600 text-white py-2 px-4 rounded-lg text-sm hover:bg-blue-700 transition-colors"
+                    >
+                      Anketi Doldur
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Subscription Status */}
+              {!isLoading && (
+                <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
+                  <h3 className="text-sm font-semibold text-slate-800 mb-3">
+                    Abonelik Durumu
+                  </h3>
+                  <div className="flex items-center">
+                    <div
+                      className={`w-3 h-3 rounded-full mr-3 ${
+                        hasSubscription ? "bg-green-500" : "bg-red-500"
+                      }`}
+                    ></div>
+                    <span className="text-sm text-slate-600">
+                      {hasSubscription ? "Aktif Abonelik" : "Abonelik Yok"}
+                    </span>
+                  </div>
+                  {hasSubscription && subscription && (
+                    <div className="mt-3 space-y-2">
+                      <div className="text-xs text-slate-500">
+                        <strong>Paket:</strong> {subscription.package_name}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        <strong>Fiyat:</strong> ₺{subscription.total_amount}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        <strong>Bitiş:</strong>{" "}
+                        {new Date(subscription.end_date).toLocaleDateString(
+                          "tr-TR"
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {!hasSubscription && hasSurvey && (
+                    <button
+                      onClick={() => navigate("/reklam-paket-secim")}
+                      className="mt-3 w-full bg-green-600 text-white py-2 px-4 rounded-lg text-sm hover:bg-green-700 transition-colors"
+                    >
+                      Paket Seç
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -393,14 +529,16 @@ const DashboardPage = () => {
                 key={room.id}
                 className={`group bg-white/90 backdrop-blur-sm rounded-2xl p-6 shadow-lg hover:shadow-2xl transition-all duration-500 transform hover:scale-105 hover:-translate-y-2 border border-slate-200/50 ${
                   isVisible
-                    ? "opacity-100 translate-y-0"
-                    : "opacity-0 translate-y-10"
+                    ? "translate-y-0 opacity-100"
+                    : "translate-y-20 opacity-0"
                 }`}
-                style={{ transitionDelay: `${index * 100}ms` }}
+                style={{
+                  transitionDelay: `${index * 100}ms`,
+                }}
               >
                 {/* Room Header */}
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-semibold text-slate-800">
+                  <h3 className="text-lg font-semibold text-slate-800">
                     {room.name}
                   </h3>
                   <div
@@ -497,6 +635,7 @@ const DashboardPage = () => {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 };

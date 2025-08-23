@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getApiUrl, getAuthHeaders, API_ENDPOINTS } from "../config/api";
-import { isAuthenticated } from "../utils/auth";
+import InfoModal from "../components/InfoModal";
 
 const SurveyPage = () => {
   const navigate = useNavigate();
@@ -12,6 +11,13 @@ const SurveyPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAnswers, setShowAnswers] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [modalInfo, setModalInfo] = useState({
+    title: "",
+    message: "",
+    type: "info",
+    redirectPath: "",
+  });
 
   const questions = [
     {
@@ -225,36 +231,97 @@ const SurveyPage = () => {
   }, []);
 
   const checkSurveyStatus = async () => {
-    try {
-      if (!isAuthenticated()) {
-        navigate("/login");
-        return;
+    // Giriş yapan kişinin bilgilerini localStorage'dan al
+    const userInfo = localStorage.getItem("user_info");
+    const token = localStorage.getItem("metagrowths_token");
+    let currentUser = null;
+
+    if (userInfo) {
+      try {
+        currentUser = JSON.parse(userInfo);
+      } catch (error) {
+        console.error("Kullanıcı bilgileri parse edilemedi:", error);
       }
-
-      const token = localStorage.getItem("metagrowths_token");
-
-      const response = await fetch(getApiUrl(API_ENDPOINTS.survey), {
-        method: "GET",
-        headers: getAuthHeaders(token),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.data.survey.is_completed) {
-          // Anket zaten doldurulmuş, dashboard'a yönlendir
-          alert(
-            "Anketiniz zaten doldurulmuş! Dashboard'a yönlendiriliyorsunuz."
-          );
-          navigate("/dashboard");
-          return;
-        }
-      }
-    } catch (error) {
-      console.error("Survey status check error:", error);
-      // Hata durumunda anket sayfasını göster
-    } finally {
-      setIsLoading(false);
     }
+
+    // Eğer kullanıcı bilgisi yoksa simüle edilmiş kullanıcı kullan
+    if (!currentUser) {
+      currentUser = {
+        customer_id: 123,
+        name: "Ahmet Yılmaz",
+        email: "ahmet@example.com",
+      };
+      console.warn(
+        "⚠️ Kullanıcı bilgileri bulunamadı, simüle edilmiş kullanıcı kullanılıyor"
+      );
+    }
+
+    console.log("Anket durumu kontrol ediliyor...");
+    console.log("👤 Giriş Yapan Kullanıcı:", currentUser);
+
+    // Gerçek API isteği yap
+    if (token) {
+      try {
+        const response = await fetch("http://localhost:5000/api/auth/survey", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const isCompleted = data.data.survey.is_completed;
+
+          console.log("📊 Anket Durumu Sonucu (API):", {
+            user: `${currentUser.first_name} ${currentUser.last_name}`,
+            customer_id: currentUser.customer_id,
+            email: currentUser.email,
+            isCompleted: isCompleted,
+            message: isCompleted ? "Anket tamamlanmış" : "Anket tamamlanmamış",
+          });
+
+          if (isCompleted) {
+            setModalInfo({
+              title: "Anket Zaten Tamamlanmış! ✅",
+              message: "Anketiniz zaten doldurulmuş. Şimdi size uygun reklam paketini seçebilirsiniz.",
+              type: "success",
+              redirectPath: "/reklam-paket-secim",
+            });
+            setShowInfoModal(true);
+            return;
+          }
+        } else {
+          console.log("📊 Anket Durumu Sonucu (API 404):", {
+            user: `${currentUser.first_name} ${currentUser.last_name}`,
+            customer_id: currentUser.customer_id,
+            email: currentUser.email,
+            isCompleted: false,
+            message: "Anket bulunamadı (henüz doldurulmamış)",
+          });
+        }
+      } catch (error) {
+        console.error("API isteği hatası:", error);
+        console.log("📊 Anket Durumu Sonucu (Hata):", {
+          user: `${currentUser.first_name} ${currentUser.last_name}`,
+          customer_id: currentUser.customer_id,
+          email: currentUser.email,
+          isCompleted: false,
+          message: "API hatası - anket doldurulmamış varsayılıyor",
+        });
+      }
+    } else {
+      console.log("📊 Anket Durumu Sonucu (Token Yok):", {
+        user: `${currentUser.first_name} ${currentUser.last_name}`,
+        customer_id: currentUser.customer_id,
+        email: currentUser.email,
+        isCompleted: false,
+        message: "Token bulunamadı - anket doldurulmamış varsayılıyor",
+      });
+    }
+
+    setIsLoading(false);
   };
 
   useEffect(() => {
@@ -287,34 +354,42 @@ const SurveyPage = () => {
     setIsSubmitting(true);
 
     try {
-      if (!isAuthenticated()) {
-        throw new Error("Oturum bulunamadı. Lütfen tekrar giriş yapın.");
-      }
-
       const token = localStorage.getItem("metagrowths_token");
 
-      const response = await fetch(getApiUrl(API_ENDPOINTS.survey), {
+      if (!token) {
+        throw new Error("Token bulunamadı. Lütfen tekrar giriş yapın.");
+      }
+
+      console.log("Anket cevapları gönderiliyor:", answers);
+
+      const response = await fetch("/api/auth/survey", {
         method: "POST",
-        headers: getAuthHeaders(token),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           answers: answers,
         }),
       });
 
-      const data = await response.json();
+      if (response.ok) {
+        const data = await response.json();
+        console.log("Anket başarıyla kaydedildi:", data);
 
-      if (!response.ok) {
-        throw new Error(data.message || "Anket tamamlama başarısız");
+        alert(
+          "Anket cevaplarınız başarıyla kaydedildi! Paket seçim sayfasına yönlendiriliyorsunuz."
+        );
+        navigate("/reklam-paket-secim");
+      } else {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.message || "Anket gönderilirken bir hata oluştu"
+        );
       }
-
-      // Başarılı gönderim
-      alert(
-        "Anket cevaplarınız başarıyla kaydedildi! Paket seçim sayfasına yönlendiriliyorsunuz."
-      );
-      navigate("/reklam-paket-secim");
     } catch (error) {
       console.error("Survey submission error:", error);
-      alert(error.message || "Anket gönderimi sırasında bir hata oluştu");
+      alert(error.message || "Anket gönderilirken bir hata oluştu");
     } finally {
       setIsSubmitting(false);
     }
