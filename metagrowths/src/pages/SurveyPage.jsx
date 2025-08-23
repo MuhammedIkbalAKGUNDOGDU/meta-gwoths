@@ -285,11 +285,13 @@ const SurveyPage = () => {
           if (isCompleted) {
             setModalInfo({
               title: "Anket Zaten Tamamlanmış! ✅",
-              message: "Anketiniz zaten doldurulmuş. Şimdi size uygun reklam paketini seçebilirsiniz.",
+              message:
+                "Anketiniz zaten doldurulmuş. Şimdi size uygun reklam paketini seçebilirsiniz.",
               type: "success",
               redirectPath: "/reklam-paket-secim",
             });
             setShowInfoModal(true);
+            setIsLoading(false);
             return;
           }
         } else {
@@ -336,6 +338,15 @@ const SurveyPage = () => {
     }));
   };
 
+  const handleModalClose = () => {
+    setShowInfoModal(false);
+  };
+
+  const handleModalContinue = () => {
+    setShowInfoModal(false);
+    navigate(modalInfo.redirectPath);
+  };
+
   const handleNext = () => {
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
@@ -362,7 +373,7 @@ const SurveyPage = () => {
 
       console.log("Anket cevapları gönderiliyor:", answers);
 
-      const response = await fetch("/api/auth/survey", {
+      const response = await fetch("http://localhost:5000/api/auth/survey", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -377,10 +388,14 @@ const SurveyPage = () => {
         const data = await response.json();
         console.log("Anket başarıyla kaydedildi:", data);
 
-        alert(
-          "Anket cevaplarınız başarıyla kaydedildi! Paket seçim sayfasına yönlendiriliyorsunuz."
-        );
-        navigate("/reklam-paket-secim");
+        setModalInfo({
+          title: "Anket Tamamlandı! 🎉",
+          message:
+            "Anket cevaplarınız başarıyla kaydedildi! Şimdi size uygun reklam paketini seçebilirsiniz.",
+          type: "success",
+          redirectPath: "/reklam-paket-secim",
+        });
+        setShowInfoModal(true);
       } else {
         const errorData = await response.json();
         throw new Error(
@@ -790,6 +805,17 @@ const SurveyPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Info Modal */}
+      <InfoModal
+        isOpen={showInfoModal}
+        onClose={handleModalClose}
+        title={modalInfo.title}
+        message={modalInfo.message}
+        type={modalInfo.type}
+        buttonText="Devam Et"
+        onButtonClick={handleModalContinue}
+      />
     </div>
   );
 };

@@ -96,25 +96,20 @@ const LoginPage = () => {
             : "Anket tamamlanmamış",
         });
 
-        // Anket durumuna göre modal göster ve yönlendirme yap
+        // Anket durumuna göre yönlendirme yap
         if (surveyCompleted) {
-          // Anket doldurulmuş, paket seçim sayfasına yönlendir
+          // Anket doldurulmuş, modal göster ve paket seçim sayfasına yönlendir
           setModalInfo({
             title: "Hoş Geldiniz! 🎉",
-            message: "Anketiniz zaten tamamlanmış. Şimdi size uygun reklam paketini seçebilirsiniz.",
+            message:
+              "Anketiniz zaten tamamlanmış. Şimdi size uygun reklam paketini seçebilirsiniz.",
             type: "success",
             redirectPath: "/reklam-paket-secim",
           });
           setShowInfoModal(true);
         } else {
-          // Anket doldurulmamış, anket sayfasına yönlendir
-          setModalInfo({
-            title: "Hoş Geldiniz! 📋",
-            message: "Devam etmek için lütfen kısa bir anket doldurun. Bu sayede size en uygun hizmeti sunabiliriz.",
-            type: "info",
-            redirectPath: "/anket",
-          });
-          setShowInfoModal(true);
+          // Anket doldurulmamış, direkt anket sayfasına yönlendir
+          navigate("/anket");
         }
       }
     } catch (error) {
