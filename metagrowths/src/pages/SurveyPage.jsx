@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import InfoModal from "../components/InfoModal";
+import { getApiUrl } from "../config/api";
 
 const SurveyPage = () => {
   const navigate = useNavigate();
@@ -262,7 +263,7 @@ const SurveyPage = () => {
     // Gerçek API isteği yap
     if (token) {
       try {
-        const response = await fetch("http://localhost:5000/api/auth/survey", {
+        const response = await fetch(getApiUrl("/auth/survey"), {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -373,7 +374,7 @@ const SurveyPage = () => {
 
       console.log("Anket cevapları gönderiliyor:", answers);
 
-      const response = await fetch("http://localhost:5000/api/auth/survey", {
+      const response = await fetch(getApiUrl("/auth/survey"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

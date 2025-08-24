@@ -138,7 +138,7 @@ const DashboardPage = () => {
     // Gerçek API isteği yap
     if (token) {
       try {
-        const response = await fetch("/api/auth/subscription", {
+        const response = await fetch(getApiUrl("/auth/subscription"), {
           method: "GET",
           headers: {
             "Content-Type": "application/json",

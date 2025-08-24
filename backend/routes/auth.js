@@ -724,9 +724,20 @@ router.post("/subscription", authenticateToken, async (req, res) => {
     const { package_name, package_details, total_amount } = req.body;
     const customerId = req.user.customer_id;
 
-    // Calculate end date (1 month from now)
+    // Calculate end date based on package duration
     const endDate = new Date();
-    endDate.setMonth(endDate.getMonth() + 1);
+    const duration = package_details.duration;
+
+    if (duration.includes("4 Ay")) {
+      endDate.setMonth(endDate.getMonth() + 4);
+    } else if (duration.includes("8 Ay")) {
+      endDate.setMonth(endDate.getMonth() + 8);
+    } else if (duration.includes("12 Ay")) {
+      endDate.setMonth(endDate.getMonth() + 12);
+    } else {
+      // Default to 1 month
+      endDate.setMonth(endDate.getMonth() + 1);
+    }
 
     const result = await query(
       `INSERT INTO subscriptions (customer_id, package_name, package_details, end_date, total_amount)
@@ -765,14 +776,21 @@ router.get("/subscription", authenticateToken, async (req, res) => {
     const customerId = req.user.customer_id;
 
     const result = await query(
-      `SELECT * FROM subscriptions WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      `SELECT * FROM subscriptions 
+       WHERE customer_id = $1 
+       AND subscription_status = 'active' 
+       AND end_date > CURRENT_TIMESTAMP
+       ORDER BY created_at DESC LIMIT 1`,
       [customerId]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({
-        status: "error",
-        message: "Henüz abonelik bulunmuyor",
+      return res.json({
+        status: "success",
+        data: {
+          subscription: null,
+        },
+        message: "Aktif abonelik bulunmuyor",
       });
     }
 

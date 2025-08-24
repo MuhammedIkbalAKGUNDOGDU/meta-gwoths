@@ -18,6 +18,10 @@ export const API_ENDPOINTS = {
   survey: "/auth/survey",
   surveysAll: "/auth/surveys/all",
 
+  // Subscription endpoints
+  subscription: "/auth/subscription",
+  createSubscription: "/auth/subscription",
+
   // Health check
   health: "/health",
 };
