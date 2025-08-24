@@ -79,6 +79,16 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Store setup requests tablosu - Mağaza kurulum istekleri
+CREATE TABLE IF NOT EXISTS store_setup_requests (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES users(customer_id) ON DELETE CASCADE,
+    request_status VARCHAR(20) DEFAULT 'beklemede' CHECK (request_status IN ('beklemede', 'onaylandı', 'görüşüldü', 'reddedildi', 'tamamlandı')),
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes oluştur - Performans için
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_customer_id ON users(customer_id);
@@ -90,6 +100,8 @@ CREATE INDEX IF NOT EXISTS idx_survey_status_customer_id ON survey_status(custom
 CREATE INDEX IF NOT EXISTS idx_survey_status_is_completed ON survey_status(is_completed);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_customer_id ON subscriptions(customer_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(subscription_status);
+CREATE INDEX IF NOT EXISTS idx_store_setup_requests_customer_id ON store_setup_requests(customer_id);
+CREATE INDEX IF NOT EXISTS idx_store_setup_requests_status ON store_setup_requests(request_status);
 
 -- Trigger function - updated_at alanını otomatik güncelle
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -132,6 +144,13 @@ CREATE TRIGGER update_mobile_forms_updated_at
 DROP TRIGGER IF EXISTS update_subscriptions_updated_at ON subscriptions;
 CREATE TRIGGER update_subscriptions_updated_at
     BEFORE UPDATE ON subscriptions
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger oluştur - store_setup_requests tablosu için
+DROP TRIGGER IF EXISTS update_store_setup_requests_updated_at ON store_setup_requests;
+CREATE TRIGGER update_store_setup_requests_updated_at
+    BEFORE UPDATE ON store_setup_requests
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 

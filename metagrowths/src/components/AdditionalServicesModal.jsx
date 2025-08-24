@@ -45,7 +45,7 @@ const AdditionalServicesModal = ({ isOpen, onClose, onComplete }) => {
     },
   ];
 
-  const handleServiceToggle = (serviceId) => {
+  const handleServiceToggle = async (serviceId) => {
     if (serviceId === "website") {
       setIsWebFormOpen(true);
       return;
@@ -53,6 +53,41 @@ const AdditionalServicesModal = ({ isOpen, onClose, onComplete }) => {
 
     if (serviceId === "mobile_app") {
       setIsMobileFormOpen(true);
+      return;
+    }
+
+    if (serviceId === "store_setup") {
+      try {
+        const token = localStorage.getItem("metagrowths_token");
+        const headers = token
+          ? {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            }
+          : { "Content-Type": "application/json" };
+
+        const response = await fetch(
+          "http://localhost:5000/api/auth/store-setup-request",
+          {
+            method: "POST",
+            headers,
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || "Mağaza kurulum isteği başarısız");
+        }
+
+        alert("Mağaza kurulum isteğiniz başarıyla gönderildi!");
+        setSelectedServices((prev) => [...prev, "store_setup"]);
+      } catch (error) {
+        console.error("Store setup request error:", error);
+        alert(
+          "Mağaza kurulum isteği gönderilirken bir hata oluştu. Lütfen tekrar deneyin."
+        );
+      }
       return;
     }
 

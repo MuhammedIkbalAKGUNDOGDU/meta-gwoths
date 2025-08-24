@@ -809,4 +809,90 @@ router.get("/subscription", authenticateToken, async (req, res) => {
   }
 });
 
+// @route   POST /api/auth/store-setup-request
+// @desc    Create store setup request
+// @access  Private
+router.post("/store-setup-request", authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.customer_id;
+
+    // Check if user already has a pending request
+    const existingRequest = await query(
+      `SELECT * FROM store_setup_requests 
+       WHERE customer_id = $1 
+       AND request_status IN ('beklemede', 'onaylandı')
+       ORDER BY created_at DESC LIMIT 1`,
+      [customerId]
+    );
+
+    if (existingRequest.rows.length > 0) {
+      return res.status(400).json({
+        status: "error",
+        message: "Zaten bekleyen bir mağaza kurulum isteğiniz bulunmaktadır",
+      });
+    }
+
+    // Create new store setup request
+    const result = await query(
+      `INSERT INTO store_setup_requests (customer_id, request_status)
+       VALUES ($1, $2)
+       RETURNING *`,
+      [customerId, "beklemede"]
+    );
+
+    res.status(201).json({
+      status: "success",
+      message: "Mağaza kurulum isteği başarıyla oluşturuldu",
+      data: {
+        request: result.rows[0],
+      },
+    });
+  } catch (error) {
+    console.error("Store setup request creation error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Mağaza kurulum isteği oluşturulurken bir hata oluştu",
+    });
+  }
+});
+
+// @route   GET /api/auth/store-setup-request
+// @desc    Get user's store setup request
+// @access  Private
+router.get("/store-setup-request", authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.customer_id;
+
+    const result = await query(
+      `SELECT * FROM store_setup_requests 
+       WHERE customer_id = $1 
+       ORDER BY created_at DESC LIMIT 1`,
+      [customerId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({
+        status: "success",
+        data: {
+          request: null,
+        },
+        message: "Mağaza kurulum isteği bulunmuyor",
+      });
+    }
+
+    res.json({
+      status: "success",
+      data: {
+        request: result.rows[0],
+      },
+    });
+  } catch (error) {
+    console.error("Store setup request retrieval error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Mağaza kurulum isteği alınırken bir hata oluştu",
+    });
+  }
+});
+
 module.exports = router;
