@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import AdditionalServicesModal from "../components/AdditionalServicesModal";
 import { getApiUrl } from "../config/api";
 
 const PackageSelectionPage = () => {
@@ -10,6 +11,8 @@ const PackageSelectionPage = () => {
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showAdditionalServices, setShowAdditionalServices] = useState(false);
+  const [selectedServices, setSelectedServices] = useState([]);
 
   useEffect(() => {
     setIsVisible(true);
@@ -231,10 +234,8 @@ const PackageSelectionPage = () => {
         const data = await response.json();
         console.log("Paket başarıyla seçildi:", data);
 
-        alert(
-          `"${selectedPkg.name}" paketi başarıyla seçildi! Dashboard'a yönlendiriliyorsunuz.`
-        );
-        navigate("/dashboard");
+        // Ek hizmetler modalını aç
+        setShowAdditionalServices(true);
       } else {
         const errorData = await response.json();
         throw new Error(
@@ -247,6 +248,16 @@ const PackageSelectionPage = () => {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleAdditionalServicesComplete = (services) => {
+    setSelectedServices(services);
+    console.log("Seçilen ek hizmetler:", services);
+
+    alert(
+      `"${selectedPackage}" paketi başarıyla seçildi! Dashboard'a yönlendiriliyorsunuz.`
+    );
+    navigate("/dashboard");
   };
 
   return (
@@ -469,6 +480,13 @@ const PackageSelectionPage = () => {
       </section>
 
       <Footer />
+
+      {/* Additional Services Modal */}
+      <AdditionalServicesModal
+        isOpen={showAdditionalServices}
+        onClose={() => setShowAdditionalServices(false)}
+        onComplete={handleAdditionalServicesComplete}
+      />
     </div>
   );
 };
