@@ -13,6 +13,7 @@ const PackageSelectionPage = () => {
   const [error, setError] = useState("");
   const [showAdditionalServices, setShowAdditionalServices] = useState(false);
   const [selectedServices, setSelectedServices] = useState([]);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
 
   useEffect(() => {
     setIsVisible(true);
@@ -74,10 +75,7 @@ const PackageSelectionPage = () => {
           });
 
           if (hasSubscription) {
-            alert(
-              "Zaten aktif bir aboneliğiniz var! Dashboard'a yönlendiriliyorsunuz."
-            );
-            navigate("/dashboard");
+            setShowSubscriptionModal(true);
             return;
           }
         } else if (response.status === 404) {
@@ -487,6 +485,64 @@ const PackageSelectionPage = () => {
         onClose={() => setShowAdditionalServices(false)}
         onComplete={handleAdditionalServicesComplete}
       />
+
+      {/* Subscription Exists Modal */}
+      {showSubscriptionModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300"
+            onClick={() => setShowSubscriptionModal(false)}
+          />
+
+          {/* Modal */}
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300 scale-100">
+              {/* Modal Header */}
+              <div className="relative p-8 text-center">
+                {/* Success Icon */}
+                <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-6">
+                  <svg
+                    className="h-8 w-8 text-green-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                </div>
+
+                <h3 className="text-2xl font-bold text-slate-800 mb-4">
+                  Aboneliğiniz Mevcut! 🎉
+                </h3>
+
+                <p className="text-slate-600 mb-6 leading-relaxed">
+                  Zaten aktif bir aboneliğiniz bulunmaktadır. Dashboard'a
+                  yönlendirilerek mevcut hizmetlerinizi görüntüleyebilirsiniz.
+                </p>
+
+                {/* Action Button */}
+                <div className="flex justify-center">
+                  <button
+                    onClick={() => {
+                      setShowSubscriptionModal(false);
+                      navigate("/dashboard");
+                    }}
+                    className="w-full bg-gradient-to-r from-blue-600 to-slate-700 text-white py-3 px-6 rounded-xl font-semibold hover:shadow-lg transform hover:scale-105 transition-all duration-200"
+                  >
+                    Dashboard'a Git
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
