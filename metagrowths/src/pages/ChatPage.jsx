@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 
 const ChatPage = () => {
+  const { userId } = useParams();
+  const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [messages, setMessages] = useState([
     {
@@ -38,7 +41,41 @@ const ChatPage = () => {
 
   useEffect(() => {
     setIsVisible(true);
-  }, []);
+    checkUserAccess();
+  }, [userId]);
+
+  const checkUserAccess = () => {
+    const userInfo = localStorage.getItem("user_info");
+    if (!userInfo) {
+      navigate("/login");
+      return;
+    }
+
+    try {
+      const currentUser = JSON.parse(userInfo);
+      const currentUserId = currentUser.customer_id.toString();
+
+      // Sadece giriş yapan kullanıcı kendi chat sayfasına erişebilir
+      if (userId && userId !== currentUserId) {
+        console.log("🚫 Yetkisiz erişim:", {
+          requested_user_id: userId,
+          current_user_id: currentUserId,
+          user: `${currentUser.first_name} ${currentUser.last_name}`,
+        });
+        navigate("/dashboard");
+        return;
+      }
+
+      console.log("✅ Chat sayfası erişimi onaylandı:", {
+        user_id: userId,
+        current_user: `${currentUser.first_name} ${currentUser.last_name}`,
+        customer_id: currentUser.customer_id,
+      });
+    } catch (error) {
+      console.error("Kullanıcı bilgileri parse edilemedi:", error);
+      navigate("/login");
+    }
+  };
 
   const handleSidebarToggle = () => {
     setIsSidebarOpen(!isSidebarOpen);
@@ -360,4 +397,3 @@ const ChatPage = () => {
 };
 
 export default ChatPage;
-

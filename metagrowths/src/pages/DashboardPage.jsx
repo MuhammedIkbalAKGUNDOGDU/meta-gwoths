@@ -14,6 +14,8 @@ const DashboardPage = () => {
   const [hasSubscription, setHasSubscription] = useState(false);
   const [subscription, setSubscription] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
 
   useEffect(() => {
     setIsVisible(true);
@@ -138,28 +140,43 @@ const DashboardPage = () => {
     // Gerçek API isteği yap
     if (token) {
       try {
-        const response = await fetch(getApiUrl("/auth/subscription"), {
+        const response = await fetch(getApiUrl(API_ENDPOINTS.subscription), {
           method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
+          headers: getAuthHeaders(token),
         });
 
         if (response.ok) {
           const data = await response.json();
-          const hasActiveSubscription = true;
+          const hasActiveSubscription = data.data.subscription !== null;
+          const isChatPageSelected = data.data.is_chat_page_selected || false;
 
           console.log("💳 Dashboard - Abonelik Durumu Sonucu (API):", {
             user: `${currentUser.first_name} ${currentUser.last_name}`,
             customer_id: currentUser.customer_id,
             email: currentUser.email,
             hasActiveSubscription: hasActiveSubscription,
-            message: "Aktif abonelik var",
+            is_chat_page_selected: isChatPageSelected,
+            message: hasActiveSubscription
+              ? "Aktif abonelik var"
+              : "Aktif abonelik yok",
           });
 
           setHasSubscription(hasActiveSubscription);
           setSubscription(data.data.subscription);
+
+          // Eğer chat sayfası zaten seçilmişse direkt yönlendir
+          if (isChatPageSelected) {
+            console.log(
+              "🚀 Chat sayfası zaten seçilmiş, direkt yönlendiriliyor:",
+              {
+                user: `${currentUser.first_name} ${currentUser.last_name}`,
+                customer_id: currentUser.customer_id,
+                is_chat_page_selected: isChatPageSelected,
+              }
+            );
+            navigate(`/chat/${currentUser.customer_id}`);
+            return;
+          }
         } else if (response.status === 404) {
           console.log("💳 Dashboard - Abonelik Durumu Sonucu (API 404):", {
             user: `${currentUser.first_name} ${currentUser.last_name}`,
@@ -196,6 +213,60 @@ const DashboardPage = () => {
     }
 
     setIsLoading(false);
+  };
+
+  const handleChatPageSelection = async (roomId) => {
+    setIsChatLoading(true);
+    setShowChatModal(true);
+
+    try {
+      const token = localStorage.getItem("metagrowths_token");
+      const userInfo = localStorage.getItem("user_info");
+
+      if (!token || !userInfo) {
+        throw new Error("Token veya kullanıcı bilgisi bulunamadı");
+      }
+
+      const currentUser = JSON.parse(userInfo);
+
+      console.log("🎯 Chat sayfası seçiliyor...", {
+        user: `${currentUser.first_name} ${currentUser.last_name}`,
+        customer_id: currentUser.customer_id,
+        room_id: roomId,
+      });
+
+      // Chat page seçimi API'sini çağır
+      const response = await fetch(getApiUrl(API_ENDPOINTS.selectChatPage), {
+        method: "POST",
+        headers: getAuthHeaders(token),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+
+        console.log("✅ Chat sayfası seçimi başarılı:", {
+          user: `${currentUser.first_name} ${currentUser.last_name}`,
+          customer_id: currentUser.customer_id,
+          is_chat_page_selected: data.data.is_chat_page_selected,
+          message: data.message,
+        });
+
+        // 2 saniye sonra chat sayfasına yönlendir
+        setTimeout(() => {
+          setShowChatModal(false);
+          navigate(`/chat/${currentUser.customer_id}`);
+        }, 2000);
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Chat sayfası seçimi başarısız");
+      }
+    } catch (error) {
+      console.error("❌ Chat sayfası seçimi hatası:", error);
+      setShowChatModal(false);
+      alert("Chat sayfası seçilirken bir hata oluştu: " + error.message);
+    } finally {
+      setIsChatLoading(false);
+    }
   };
 
   const handleSidebarToggle = () => {
@@ -650,8 +721,14 @@ const DashboardPage = () => {
                 {/* Action Buttons */}
                 <div className="flex space-x-2">
                   {room.status === "available" ? (
-                    <button className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-slate-700 text-white text-sm font-medium rounded-lg hover:shadow-lg transform hover:scale-105 transition-all duration-200">
-                      Katıl
+                    <button
+                      onClick={() => handleChatPageSelection(room.id)}
+                      disabled={isChatLoading}
+                      className={`flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-slate-700 text-white text-sm font-medium rounded-lg hover:shadow-lg transform hover:scale-105 transition-all duration-200 ${
+                        isChatLoading ? "opacity-50 cursor-not-allowed" : ""
+                      }`}
+                    >
+                      {isChatLoading ? "Katılıyor..." : "Katıl"}
                     </button>
                   ) : (
                     <button
@@ -683,6 +760,45 @@ const DashboardPage = () => {
         </div>
       </div>
       <Footer />
+
+      {/* Chat Loading Modal */}
+      {showChatModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          {/* Backdrop */}
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300" />
+
+          {/* Modal */}
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div className="relative bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 transform transition-all duration-300 scale-100">
+              {/* Modal Content */}
+              <div className="relative p-8 text-center">
+                {/* Loading Icon */}
+                <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-6">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+
+                <h3 className="text-2xl font-bold text-slate-800 mb-4">
+                  Çalışma Alanına Katılıyor... 🚀
+                </h3>
+
+                <p className="text-slate-600 mb-6 leading-relaxed">
+                  Chat sayfası seçiliyor ve çalışma alanına
+                  yönlendiriliyorsunuz. Lütfen bekleyin.
+                </p>
+
+                {/* Progress Bar */}
+                <div className="w-full bg-slate-200 rounded-full h-2 mb-4">
+                  <div className="bg-gradient-to-r from-blue-600 to-slate-700 h-2 rounded-full animate-pulse"></div>
+                </div>
+
+                <p className="text-sm text-slate-500">
+                  API çağrısı yapılıyor...
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
