@@ -38,7 +38,7 @@ const DashboardPage = () => {
     // Eğer kullanıcı bilgisi yoksa simüle edilmiş kullanıcı kullan
     if (!currentUser) {
       currentUser = {
-        customer_id: 123,
+        customer_id: -1,
         name: "Ahmet Yılmaz",
         email: "ahmet@example.com",
       };
@@ -258,22 +258,64 @@ const DashboardPage = () => {
       id: 4,
       name: "Çalışma Alanı 4",
       capacity: 4,
-      occupants: 2,
-      status: "active",
+      occupants: 4,
+      status: "full",
     },
     {
       id: 5,
       name: "Çalışma Alanı 5",
       capacity: 4,
-      occupants: 0,
-      status: "empty",
+      occupants: 4,
+      status: "full",
     },
     {
       id: 6,
       name: "Çalışma Alanı 6",
       capacity: 4,
-      occupants: 1,
-      status: "available",
+      occupants: 4,
+      status: "full",
+    },
+    {
+      id: 7,
+      name: "Çalışma Alanı 7",
+      capacity: 4,
+      occupants: 4,
+      status: "full",
+    },
+    {
+      id: 8,
+      name: "Çalışma Alanı 8",
+      capacity: 4,
+      occupants: 4,
+      status: "full",
+    },
+    {
+      id: 9,
+      name: "Çalışma Alanı 9",
+      capacity: 4,
+      occupants: 4,
+      status: "full",
+    },
+    {
+      id: 10,
+      name: "Çalışma Alanı 10",
+      capacity: 4,
+      occupants: 4,
+      status: "full",
+    },
+    {
+      id: 11,
+      name: "Çalışma Alanı 11",
+      capacity: 4,
+      occupants: 4,
+      status: "full",
+    },
+    {
+      id: 12,
+      name: "Çalışma Alanı 12",
+      capacity: 4,
+      occupants: 4,
+      status: "full",
     },
   ];
 
@@ -498,6 +540,11 @@ const DashboardPage = () => {
               </h1>
               <p className="text-slate-600">
                 Tüm çalışma alanlarının durumunu takip edin ve yönetin
+              </p>
+              <p className="text-slate-600 mt-2">
+                Seçeceğiniz çalışma alanında sizle iş yapacak kişiler
+                bulnumaktadır size özel olarak tanımlanacak herhangi bir fark
+                bulunmamaktadır lütfen boş bulunan odaya geçelim
               </p>
             </div>
             <div className="flex items-center space-x-4">

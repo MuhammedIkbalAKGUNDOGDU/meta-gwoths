@@ -42,6 +42,7 @@ const createTables = async (client) => {
         company VARCHAR(100),
         phone VARCHAR(20),
         is_active BOOLEAN DEFAULT true,
+        is_chat_page_selected BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );

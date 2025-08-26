@@ -775,12 +775,15 @@ router.get("/subscription", authenticateToken, async (req, res) => {
   try {
     const customerId = req.user.customer_id;
 
+    // Get subscription and user info including is_chat_page_selected
     const result = await query(
-      `SELECT * FROM subscriptions 
-       WHERE customer_id = $1 
-       AND subscription_status = 'active' 
-       AND end_date > CURRENT_TIMESTAMP
-       ORDER BY created_at DESC LIMIT 1`,
+      `SELECT s.*, u.is_chat_page_selected 
+       FROM subscriptions s
+       LEFT JOIN users u ON s.customer_id = u.customer_id
+       WHERE s.customer_id = $1 
+       AND s.subscription_status = 'active' 
+       AND s.end_date > CURRENT_TIMESTAMP
+       ORDER BY s.created_at DESC LIMIT 1`,
       [customerId]
     );
 
@@ -789,6 +792,7 @@ router.get("/subscription", authenticateToken, async (req, res) => {
         status: "success",
         data: {
           subscription: null,
+          is_chat_page_selected: false,
         },
         message: "Aktif abonelik bulunmuyor",
       });
@@ -798,6 +802,7 @@ router.get("/subscription", authenticateToken, async (req, res) => {
       status: "success",
       data: {
         subscription: result.rows[0],
+        is_chat_page_selected: result.rows[0].is_chat_page_selected,
       },
     });
   } catch (error) {
@@ -891,6 +896,46 @@ router.get("/store-setup-request", authenticateToken, async (req, res) => {
     res.status(500).json({
       status: "error",
       message: "Mağaza kurulum isteği alınırken bir hata oluştu",
+    });
+  }
+});
+
+// @route   POST /api/auth/select-chat-page
+// @desc    Set user's chat page selection to true
+// @access  Private
+router.post("/select-chat-page", authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.customer_id;
+
+    // Update user's is_chat_page_selected to true
+    const result = await query(
+      `UPDATE users 
+       SET is_chat_page_selected = true, updated_at = CURRENT_TIMESTAMP
+       WHERE customer_id = $1
+       RETURNING customer_id, is_chat_page_selected`,
+      [customerId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Kullanıcı bulunamadı",
+      });
+    }
+
+    res.json({
+      status: "success",
+      message: "Chat sayfası başarıyla seçildi",
+      data: {
+        customer_id: result.rows[0].customer_id,
+        is_chat_page_selected: result.rows[0].is_chat_page_selected,
+      },
+    });
+  } catch (error) {
+    console.error("Chat page selection error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Chat sayfası seçilirken bir hata oluştu",
     });
   }
 });

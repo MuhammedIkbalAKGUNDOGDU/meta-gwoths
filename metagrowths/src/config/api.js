@@ -22,6 +22,9 @@ export const API_ENDPOINTS = {
   subscription: "/auth/subscription",
   createSubscription: "/auth/subscription",
 
+  // Chat page selection
+  selectChatPage: "/auth/select-chat-page",
+
   // Health check
   health: "/health",
 };
