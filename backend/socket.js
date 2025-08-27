@@ -137,7 +137,7 @@ const initializeSocket = (server) => {
         // Check if user has access to this room
         const accessCheck = await query(
           `
-          SELECT cp.role, cp.permission_type
+          SELECT cp.role, cperm.permission_type
           FROM chat_participants cp
           LEFT JOIN chat_permissions cperm ON cp.room_id = cperm.room_id AND cp.user_id = cperm.user_id
           WHERE cp.room_id = $1 AND cp.user_id = $2
