@@ -63,7 +63,7 @@ router.get("/rooms", authenticateToken, async (req, res) => {
 router.get(
   "/rooms/all",
   authenticateAdmin,
-  authorizeRole(["super_admin"]),
+  authorizeRole(["super_admin", "admin", "editor", "advertiser"]),
   async (req, res) => {
     try {
       const result = await query(`
@@ -607,13 +607,38 @@ router.post("/rooms/:roomId/join", authenticateToken, async (req, res) => {
       });
     }
 
+    // Get user's role
+    const userResult = await query(
+      `SELECT role FROM users WHERE customer_id = $1`,
+      [customerId]
+    );
+
+    const userRole = userResult.rows[0].role;
+    let participantRole = "participant";
+
+    // Map user roles to chat participant roles
+    switch (userRole) {
+      case "advertiser":
+        participantRole = "advertiser";
+        break;
+      case "editor":
+        participantRole = "editor";
+        break;
+      case "admin":
+      case "super_admin":
+        participantRole = "admin";
+        break;
+      default:
+        participantRole = "participant";
+    }
+
     // Add user to room
     await query(
       `
       INSERT INTO chat_participants (room_id, user_id, role, is_online)
-      VALUES ($1, $2, 'participant', true)
+      VALUES ($1, $2, $3, true)
     `,
-      [roomId, customerId]
+      [roomId, customerId, participantRole]
     );
 
     res.json({

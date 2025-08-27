@@ -9,6 +9,7 @@ const {
   loginValidation,
   webFormValidation,
   mobileFormValidation,
+  chatAdminValidation,
   handleValidationErrors,
 } = require("../utils/validation");
 
@@ -23,7 +24,8 @@ router.post(
   handleValidationErrors,
   async (req, res) => {
     try {
-      const { firstName, lastName, email, password, company, phone } = req.body;
+      const { firstName, lastName, email, password, company, phone, role } =
+        req.body;
 
       // Check if user already exists
       const existingUser = await query(
@@ -44,9 +46,9 @@ router.post(
 
       // Insert new user
       const result = await query(
-        `INSERT INTO users (first_name, last_name, email, password_hash, company, phone)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING customer_id, first_name, last_name, email, company, phone, created_at`,
+        `INSERT INTO users (first_name, last_name, email, password_hash, company, phone, role)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING customer_id, first_name, last_name, email, company, phone, role, created_at`,
         [
           firstName,
           lastName,
@@ -54,6 +56,7 @@ router.post(
           passwordHash,
           company || null,
           phone || null,
+          role || "customer", // Default role is customer
         ]
       );
 
@@ -77,6 +80,7 @@ router.post(
             email: user.email,
             company: user.company,
             phone: user.phone,
+            role: user.role,
             created_at: user.created_at,
           },
           token,
@@ -492,6 +496,7 @@ router.get(
         email,
         company,
         phone,
+        role,
         is_active,
         created_at,
         updated_at
@@ -1263,5 +1268,213 @@ router.get(
     }
   }
 );
+
+// @route   POST /auth/chat-admin-register
+// @desc    Register a new chat admin user (Super Admin only)
+// @access  Private
+router.post(
+  "/chat-admin-register",
+  authenticateAdmin,
+  authorizeRole(["super_admin"]),
+  chatAdminValidation,
+  handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { firstName, lastName, email, password, role, company, phone } =
+        req.body;
+
+      // Check if user already exists
+      const existingUser = await query(
+        "SELECT customer_id FROM users WHERE email = $1",
+        [email]
+      );
+
+      if (existingUser.rows.length > 0) {
+        return res.status(400).json({
+          status: "error",
+          message: "Bu e-posta adresi zaten kayıtlı",
+        });
+      }
+
+      // Hash password
+      const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+      const passwordHash = await bcrypt.hash(password, saltRounds);
+
+      // Insert new user
+      const result = await query(
+        `INSERT INTO users (first_name, last_name, email, password_hash, company, phone, role, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+       RETURNING customer_id, first_name, last_name, email, company, phone, role, created_at`,
+        [
+          firstName,
+          lastName,
+          email,
+          passwordHash,
+          company || "MetaGrowths",
+          phone || null,
+          role,
+        ]
+      );
+
+      const user = result.rows[0];
+
+      res.status(201).json({
+        status: "success",
+        message: "Chat yönetimi hesabı başarıyla oluşturuldu",
+        data: {
+          user,
+        },
+      });
+    } catch (error) {
+      console.error("Chat admin registration error:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Hesap oluşturulurken bir hata oluştu",
+      });
+    }
+  }
+);
+
+// @route   POST /auth/admin-login
+// @desc    Admin login
+// @access  Public
+router.post("/admin-login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        status: "error",
+        message: "E-posta ve şifre gereklidir",
+      });
+    }
+
+    // Check if user exists and is admin
+    const result = await query(
+      `SELECT * FROM users WHERE email = $1 AND (role = 'admin' OR role = 'super_admin')`,
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        status: "error",
+        message: "Geçersiz e-posta veya şifre",
+      });
+    }
+
+    const user = result.rows[0];
+
+    // Check password
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+
+    if (!isValidPassword) {
+      return res.status(401).json({
+        status: "error",
+        message: "Geçersiz e-posta veya şifre",
+      });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        customer_id: user.customer_id,
+        email: user.email,
+        role: user.role,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" }
+    );
+
+    res.json({
+      status: "success",
+      message: "Admin girişi başarılı",
+      token,
+      user: {
+        customer_id: user.customer_id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error("Admin login error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Giriş yapılırken bir hata oluştu",
+    });
+  }
+});
+
+// @route   POST /auth/chat-admin-login
+// @desc    Chat admin login (for advertiser, editor, admin roles)
+// @access  Public
+router.post("/chat-admin-login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        status: "error",
+        message: "E-posta ve şifre gereklidir",
+      });
+    }
+
+    // Check if user exists and has allowed role
+    const result = await query(
+      `SELECT * FROM users WHERE email = $1 AND role IN ('advertiser', 'editor', 'admin', 'super_admin')`,
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        status: "error",
+        message: "Bu hesap chat yönetimine erişemez",
+      });
+    }
+
+    const user = result.rows[0];
+
+    // Check password
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+
+    if (!isValidPassword) {
+      return res.status(401).json({
+        status: "error",
+        message: "Geçersiz e-posta veya şifre",
+      });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        customer_id: user.customer_id,
+        email: user.email,
+        role: user.role,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "24h" }
+    );
+
+    res.json({
+      status: "success",
+      message: "Chat yönetimi girişi başarılı",
+      token,
+      user: {
+        customer_id: user.customer_id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (error) {
+    console.error("Chat admin login error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Giriş yapılırken bir hata oluştu",
+    });
+  }
+});
 
 module.exports = router;

@@ -54,7 +54,17 @@ const ChatPage = () => {
 
     const currentUserId = user.customer_id.toString();
 
-    // Sadece giriş yapan kullanıcı kendi chat sayfasına erişebilir
+    // Eğer userId bir sayı ise (oda ID'si), bu chat yönetimi sayfasından geliyor
+    if (userId && !isNaN(userId)) {
+      console.log("✅ Chat odası erişimi:", {
+        room_id: userId,
+        current_user: `${user.first_name} ${user.last_name}`,
+        customer_id: user.customer_id,
+      });
+      return;
+    }
+
+    // Eğer userId kullanıcı ID'si ise, sadece kendi odasına erişebilir
     if (userId && userId !== currentUserId) {
       console.log("🚫 Yetkisiz erişim:", {
         requested_user_id: userId,
@@ -80,6 +90,14 @@ const ChatPage = () => {
     try {
       setLoading(true);
       setError(null);
+
+      // Eğer userId bir sayı ise (oda ID'si), direkt o odaya bağlan
+      if (userId && !isNaN(userId)) {
+        const roomId = parseInt(userId);
+        await loadRoomDetails(roomId);
+        initializeSocket(roomId);
+        return;
+      }
 
       // Get user's chat rooms
       const roomsResponse = await fetch(getApiUrl(API_ENDPOINTS.chatRooms), {

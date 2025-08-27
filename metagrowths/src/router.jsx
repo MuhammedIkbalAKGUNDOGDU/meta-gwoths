@@ -15,8 +15,11 @@ import AdminPanelPage from "./pages/AdminPanelPage";
 import FormsAdminPage from "./pages/FormsAdminPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
 import TokenManagementPage from "./pages/TokenManagementPage";
+import ChatAdminPage from "./pages/ChatAdminPage";
+import ChatAdminLoginPage from "./pages/ChatAdminLoginPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
+import ChatAdminProtectedRoute from "./components/ChatAdminProtectedRoute";
 
 const AppRouter = () => {
   return (
@@ -46,6 +49,7 @@ const AppRouter = () => {
           </ProtectedRoute>
         }
       />
+
       <Route
         path="/anket"
         element={
@@ -55,12 +59,21 @@ const AppRouter = () => {
         }
       />
       <Route path="/adminlogin" element={<AdminLoginPage />} />
+      <Route path="/chat-admin-login" element={<ChatAdminLoginPage />} />
       <Route
         path="/admin"
         element={
           <AdminProtectedRoute>
             <AdminPanelPage />
           </AdminProtectedRoute>
+        }
+      />
+      <Route
+        path="/chat-admin"
+        element={
+          <ChatAdminProtectedRoute>
+            <ChatAdminPage />
+          </ChatAdminProtectedRoute>
         }
       />
       <Route

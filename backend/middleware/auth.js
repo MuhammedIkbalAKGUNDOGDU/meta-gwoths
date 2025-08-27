@@ -109,7 +109,7 @@ const authenticateAdmin = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const result = await query(
-      "SELECT customer_id, first_name, last_name, email, company, phone, is_active FROM users WHERE customer_id = $1",
+      "SELECT customer_id, first_name, last_name, email, company, phone, role, is_active FROM users WHERE customer_id = $1",
       [decoded.customer_id]
     );
 
@@ -129,8 +129,6 @@ const authenticateAdmin = async (req, res, next) => {
       });
     }
 
-    // For now, we'll consider all users as potential admins
-    // In a real application, you'd have a role field in the users table
     req.user = user;
     next();
   } catch (error) {
@@ -169,9 +167,8 @@ const authorizeRole = (allowedRoles) => {
         });
       }
 
-      // For now, we'll consider all users as super_admin
-      // This should be replaced with actual role checking
-      const userRole = "super_admin"; // This should come from the database
+      // Get user role from the database
+      const userRole = req.user.role || "customer";
 
       if (allowedRoles.includes(userRole)) {
         next();

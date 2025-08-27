@@ -93,6 +93,48 @@ const webFormValidation = [
     .withMessage("Geçerli bir bütçe aralığı seçiniz"),
 ];
 
+// Validation rules for chat admin user creation (simplified)
+const chatAdminValidation = [
+  body("firstName")
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage("Ad en az 2, en fazla 50 karakter olmalıdır")
+    .matches(/^[a-zA-ZğüşıöçĞÜŞİÖÇ\s]+$/)
+    .withMessage("Ad sadece harf içerebilir"),
+
+  body("lastName")
+    .trim()
+    .isLength({ min: 2, max: 50 })
+    .withMessage("Soyad en az 2, en fazla 50 karakter olmalıdır")
+    .matches(/^[a-zA-ZğüşıöçĞÜŞİÖÇ\s]+$/)
+    .withMessage("Soyad sadece harf içerebilir"),
+
+  body("email")
+    .isEmail()
+    .normalizeEmail()
+    .withMessage("Geçerli bir e-posta adresi giriniz"),
+
+  body("password")
+    .isLength({ min: 6 })
+    .withMessage("Şifre en az 6 karakter olmalıdır"),
+
+  body("role")
+    .isIn(["advertiser", "editor", "admin"])
+    .withMessage("Geçerli bir rol seçiniz"),
+
+  body("company")
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage("Şirket adı en fazla 100 karakter olabilir"),
+
+  body("phone")
+    .optional()
+    .trim()
+    .matches(/^[\+]?[0-9\s\-\(\)]{10,15}$/)
+    .withMessage("Geçerli bir telefon numarası giriniz"),
+];
+
 // Validation rules for mobile form
 const mobileFormValidation = [
   body("name")
@@ -171,5 +213,6 @@ module.exports = {
   loginValidation,
   webFormValidation,
   mobileFormValidation,
+  chatAdminValidation,
   handleValidationErrors,
 };

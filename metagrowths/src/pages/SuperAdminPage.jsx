@@ -9,15 +9,18 @@ import {
   getAdminToken,
   getAdminHeaders,
 } from "../utils/adminAuth";
+import CreateChatUserForm from "../components/CreateChatUserForm";
 
 const SuperAdminPage = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("overview"); // "overview", "customers", "surveys", "forms"
+  const [activeTab, setActiveTab] = useState("overview"); // "overview", "customers", "surveys", "forms", "chat-users"
   const [customers, setCustomers] = useState([]);
   const [surveys, setSurveys] = useState([]);
   const [webForms, setWebForms] = useState([]);
   const [mobileForms, setMobileForms] = useState([]);
+  const [chatUsers, setChatUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
 
   useEffect(() => {
     if (!isAdminAuthenticated()) {
@@ -35,6 +38,7 @@ const SuperAdminPage = () => {
         fetchSurveys(),
         fetchWebForms(),
         fetchMobileForms(),
+        fetchChatUsers(),
       ]);
     } catch (error) {
       console.error("Data fetch error:", error);
@@ -111,6 +115,27 @@ const SuperAdminPage = () => {
     }
   };
 
+  const fetchChatUsers = async () => {
+    try {
+      const token = getAdminToken();
+      const response = await fetch(getApiUrl("/auth/customers/all"), {
+        method: "GET",
+        headers: getAdminHeaders(token),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Sadece chat yönetimi rolleri olan kullanıcıları filtrele
+        const chatUsers = data.data.customers.filter((user) =>
+          ["advertiser", "editor", "admin"].includes(user.role)
+        );
+        setChatUsers(chatUsers);
+      }
+    } catch (error) {
+      console.error("Chat users fetch error:", error);
+    }
+  };
+
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString("tr-TR");
   };
@@ -127,6 +152,36 @@ const SuperAdminPage = () => {
         return "bg-red-100 text-red-800";
       default:
         return "bg-gray-100 text-gray-800";
+    }
+  };
+
+  const getRoleColor = (role) => {
+    switch (role) {
+      case "advertiser":
+        return "bg-green-500";
+      case "editor":
+        return "bg-blue-500";
+      case "admin":
+        return "bg-red-500";
+      case "super_admin":
+        return "bg-purple-500";
+      default:
+        return "bg-gray-500";
+    }
+  };
+
+  const getRoleDisplayName = (role) => {
+    switch (role) {
+      case "advertiser":
+        return "Reklamcı";
+      case "editor":
+        return "Editör";
+      case "admin":
+        return "Admin";
+      case "super_admin":
+        return "Süper Admin";
+      default:
+        return role;
     }
   };
 
@@ -208,6 +263,16 @@ const SuperAdminPage = () => {
               }`}
             >
               Formlar ({webForms.length + mobileForms.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("chat-users")}
+              className={`px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
+                activeTab === "chat-users"
+                  ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg"
+                  : "text-slate-600 hover:text-slate-800"
+              }`}
+            >
+              Chat Yönetimi ({chatUsers.length})
             </button>
             <button
               onClick={() => navigate("/admin/tokens")}
@@ -559,6 +624,133 @@ const SuperAdminPage = () => {
                           >
                             {form.status}
                           </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Chat Users Tab */}
+        {activeTab === "chat-users" && (
+          <div className="space-y-8">
+            {/* Create Form Modal */}
+            {showCreateForm && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full mx-4">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-bold text-slate-800">
+                      Yeni Chat Yönetimi Hesabı
+                    </h3>
+                    <button
+                      onClick={() => setShowCreateForm(false)}
+                      className="text-slate-400 hover:text-slate-600"
+                    >
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+
+                  <CreateChatUserForm
+                    onSuccess={() => {
+                      setShowCreateForm(false);
+                      fetchChatUsers();
+                    }}
+                    onCancel={() => setShowCreateForm(false)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Header */}
+            <div className="bg-white rounded-3xl shadow-2xl p-8">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-slate-800">
+                  Chat Yönetimi Hesapları ({chatUsers.length})
+                </h2>
+                <button
+                  onClick={() => setShowCreateForm(true)}
+                  className="bg-gradient-to-r from-green-600 to-green-700 text-white px-6 py-3 rounded-xl font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
+                >
+                  + Yeni Hesap Ekle
+                </button>
+              </div>
+
+              {/* Chat Users List */}
+              {chatUsers.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg
+                      className="w-8 h-8 text-slate-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                      />
+                    </svg>
+                  </div>
+                  <p className="text-slate-600">
+                    Henüz chat yönetimi hesabı bulunmuyor
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-4">
+                  {chatUsers.map((user) => (
+                    <div
+                      key={user.customer_id}
+                      className="bg-slate-50 rounded-xl p-6 hover:shadow-lg transition-all duration-300"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div
+                            className={`w-12 h-12 rounded-full flex items-center justify-center ${getRoleColor(
+                              user.role
+                            )}`}
+                          >
+                            <span className="text-lg font-bold text-white">
+                              {user.first_name.charAt(0)}
+                            </span>
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-slate-800">
+                              {user.first_name} {user.last_name}
+                            </h3>
+                            <p className="text-slate-600">{user.email}</p>
+                            <p className="text-sm text-slate-500">
+                              Şirket: {user.company || "MetaGrowths"}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-medium ${getRoleColor(
+                              user.role
+                            )}`}
+                          >
+                            {getRoleDisplayName(user.role)}
+                          </span>
+                          <p className="text-sm text-slate-500 mt-2">
+                            Oluşturulma: {formatDate(user.created_at)}
+                          </p>
                         </div>
                       </div>
                     </div>

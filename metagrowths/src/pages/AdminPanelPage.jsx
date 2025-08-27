@@ -12,7 +12,7 @@ import {
 
 const AdminPanelPage = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("customers"); // "customers" veya "surveys"
+  const [activeTab, setActiveTab] = useState("customers"); // "customers", "surveys"
   const [customers, setCustomers] = useState([]);
   const [surveys, setSurveys] = useState([]);
   const [selectedSurvey, setSelectedSurvey] = useState(null);
@@ -137,12 +137,20 @@ const AdminPanelPage = () => {
           <div className="flex items-center justify-between mb-4">
             <div></div>
             <h1 className="text-4xl font-bold text-slate-800">Admin Panel</h1>
-            <button
-              onClick={adminLogout}
-              className="bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
-            >
-              Admin Çıkış
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => navigate("/chat-admin")}
+                className="bg-gradient-to-r from-green-600 to-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
+              >
+                Chat Yönetimi
+              </button>
+              <button
+                onClick={adminLogout}
+                className="bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
+              >
+                Admin Çıkış
+              </button>
+            </div>
           </div>
         </div>
 
