@@ -206,24 +206,6 @@ const ChatPage = () => {
               ))}
             </div>
 
-            {/* Quick Actions */}
-            <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 mb-6">
-              <h3 className="text-sm font-semibold text-slate-800 mb-3">
-                Hızlı İşlemler
-              </h3>
-              <div className="space-y-2">
-                <button className="w-full text-left p-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors duration-200">
-                  📁 Dosya Paylaş
-                </button>
-                <button className="w-full text-left p-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors duration-200">
-                  📅 Toplantı Planla
-                </button>
-                <button className="w-full text-left p-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors duration-200">
-                  📊 Rapor Oluştur
-                </button>
-              </div>
-            </div>
-
             {/* Token Information */}
             <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 mb-6">
               <TokenInfo compact={true} />
@@ -232,25 +214,6 @@ const ChatPage = () => {
             {/* Token Transactions */}
             <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 mb-6">
               <TokenTransactions compact={true} limit={3} />
-            </div>
-
-            {/* Project Info */}
-            <div className="bg-gradient-to-r from-blue-600 to-slate-700 rounded-xl p-4 text-white">
-              <h3 className="text-sm font-medium mb-3">Proje Bilgileri</h3>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-sm">Proje:</span>
-                  <span className="font-semibold">Meta Growth</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm">Durum:</span>
-                  <span className="font-semibold">Aktif</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm">Bitiş:</span>
-                  <span className="font-semibold">15 Aralık</span>
-                </div>
-              </div>
             </div>
           </div>
         </div>
