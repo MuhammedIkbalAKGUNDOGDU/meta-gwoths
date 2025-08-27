@@ -209,6 +209,12 @@ const SuperAdminPage = () => {
             >
               Formlar ({webForms.length + mobileForms.length})
             </button>
+            <button
+              onClick={() => navigate("/admin/tokens")}
+              className="px-6 py-3 rounded-lg font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 transition-all duration-300"
+            >
+              Token Yönetimi
+            </button>
           </div>
         </div>
 

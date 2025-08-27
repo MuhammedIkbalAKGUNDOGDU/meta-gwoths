@@ -25,6 +25,14 @@ export const API_ENDPOINTS = {
   // Chat page selection
   selectChatPage: "/auth/select-chat-page",
 
+  // Token endpoints
+  tokens: "/auth/tokens",
+  tokenTransactions: "/auth/tokens/transactions",
+  useTokens: "/auth/tokens/use",
+  purchaseTokens: "/auth/tokens/purchase",
+  allTokens: "/auth/tokens/all",
+  allTokenTransactions: "/auth/tokens/transactions/all",
+
   // Health check
   health: "/health",
 };

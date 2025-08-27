@@ -22,6 +22,28 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- User tokens tablosu - Kullanıcı token sistemi
+CREATE TABLE IF NOT EXISTS user_tokens (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES users(customer_id) ON DELETE CASCADE,
+    total_tokens INTEGER DEFAULT 100 NOT NULL,
+    used_tokens INTEGER DEFAULT 0 NOT NULL,
+    remaining_tokens INTEGER GENERATED ALWAYS AS (total_tokens - used_tokens) STORED,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(customer_id)
+);
+
+-- Token transactions tablosu - Token işlem geçmişi
+CREATE TABLE IF NOT EXISTS token_transactions (
+    id SERIAL PRIMARY KEY,
+    customer_id INTEGER REFERENCES users(customer_id) ON DELETE CASCADE,
+    transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('purchase', 'usage', 'refund', 'bonus')),
+    amount INTEGER NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Web development forms tablosu - Web geliştirme formları
 CREATE TABLE IF NOT EXISTS web_forms (
     id SERIAL PRIMARY KEY,
@@ -93,6 +115,10 @@ CREATE TABLE IF NOT EXISTS store_setup_requests (
 -- Indexes oluştur - Performans için
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_customer_id ON users(customer_id);
+CREATE INDEX IF NOT EXISTS idx_user_tokens_customer_id ON user_tokens(customer_id);
+CREATE INDEX IF NOT EXISTS idx_user_tokens_remaining ON user_tokens(remaining_tokens);
+CREATE INDEX IF NOT EXISTS idx_token_transactions_customer_id ON token_transactions(customer_id);
+CREATE INDEX IF NOT EXISTS idx_token_transactions_created_at ON token_transactions(created_at);
 CREATE INDEX IF NOT EXISTS idx_web_forms_customer_id ON web_forms(customer_id);
 CREATE INDEX IF NOT EXISTS idx_web_forms_created_at ON web_forms(created_at);
 CREATE INDEX IF NOT EXISTS idx_mobile_forms_customer_id ON mobile_forms(customer_id);
@@ -117,6 +143,13 @@ $$ language 'plpgsql';
 DROP TRIGGER IF EXISTS update_users_updated_at ON users;
 CREATE TRIGGER update_users_updated_at
     BEFORE UPDATE ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger oluştur - user_tokens tablosu için
+DROP TRIGGER IF EXISTS update_user_tokens_updated_at ON user_tokens;
+CREATE TRIGGER update_user_tokens_updated_at
+    BEFORE UPDATE ON user_tokens
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
@@ -155,6 +188,23 @@ CREATE TRIGGER update_store_setup_requests_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+-- Function to automatically create token record for new users
+CREATE OR REPLACE FUNCTION create_user_tokens()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO user_tokens (customer_id, total_tokens, used_tokens)
+    VALUES (NEW.customer_id, 100, 0);
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Trigger to automatically create token record when new user is created
+DROP TRIGGER IF EXISTS trigger_create_user_tokens ON users;
+CREATE TRIGGER trigger_create_user_tokens
+    AFTER INSERT ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION create_user_tokens();
+
 -- Örnek veri ekle (opsiyonel - test için)
 -- INSERT INTO users (first_name, last_name, email, password_hash, company, phone) VALUES
 -- ('Admin', 'User', 'admin@metagrowths.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.iK2O', 'MetaGrowths', '+90 555 123 4567');
@@ -164,6 +214,8 @@ CREATE TRIGGER update_store_setup_requests_updated_at
 
 -- Tablo yapılarını göster
 \d users
+\d user_tokens
+\d token_transactions
 \d web_forms
 \d mobile_forms
 \d survey_status

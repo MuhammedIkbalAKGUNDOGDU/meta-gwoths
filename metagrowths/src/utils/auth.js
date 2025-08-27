@@ -1,3 +1,5 @@
+import { useState, useEffect } from "react";
+
 // Basit token kontrolü - güvenlik kontrolü yok
 export const checkTokenValidity = () => {
   const token = localStorage.getItem("metagrowths_token");
@@ -16,7 +18,7 @@ export const getUserInfo = () => {
   }
 
   try {
-    const userInfo = localStorage.getItem("metagrowths_user");
+    const userInfo = localStorage.getItem("user_info");
     return userInfo ? JSON.parse(userInfo) : null;
   } catch (error) {
     return null;
@@ -26,6 +28,41 @@ export const getUserInfo = () => {
 // Çıkış yap
 export const logout = () => {
   localStorage.removeItem("metagrowths_token");
-  localStorage.removeItem("metagrowths_user");
+  localStorage.removeItem("user_info");
   window.location.href = "/";
+};
+
+// React hook for authentication
+export const useAuth = () => {
+  const [token, setToken] = useState(localStorage.getItem("metagrowths_token"));
+  const [user, setUser] = useState(() => {
+    try {
+      const userInfo = localStorage.getItem("user_info");
+      return userInfo ? JSON.parse(userInfo) : null;
+    } catch (error) {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setToken(localStorage.getItem("metagrowths_token"));
+      try {
+        const userInfo = localStorage.getItem("user_info");
+        setUser(userInfo ? JSON.parse(userInfo) : null);
+      } catch (error) {
+        setUser(null);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
+  return {
+    token,
+    user,
+    isAuthenticated: !!token,
+    logout,
+  };
 };

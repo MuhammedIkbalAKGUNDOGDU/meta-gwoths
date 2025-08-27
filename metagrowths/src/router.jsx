@@ -14,6 +14,7 @@ import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminPanelPage from "./pages/AdminPanelPage";
 import FormsAdminPage from "./pages/FormsAdminPage";
 import SuperAdminPage from "./pages/SuperAdminPage";
+import TokenManagementPage from "./pages/TokenManagementPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
 
@@ -75,6 +76,14 @@ const AppRouter = () => {
         element={
           <AdminProtectedRoute>
             <SuperAdminPage />
+          </AdminProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/tokens"
+        element={
+          <AdminProtectedRoute>
+            <TokenManagementPage />
           </AdminProtectedRoute>
         }
       />

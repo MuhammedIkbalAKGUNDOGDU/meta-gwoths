@@ -92,7 +92,85 @@ const createTables = async (client) => {
       );
     `);
 
-    console.log("✅ Database tables created/verified successfully");
+    // User tokens table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_tokens (
+        id SERIAL PRIMARY KEY,
+        customer_id INTEGER REFERENCES users(customer_id) ON DELETE CASCADE,
+        total_tokens INTEGER DEFAULT 100 NOT NULL,
+        used_tokens INTEGER DEFAULT 0 NOT NULL,
+        remaining_tokens INTEGER GENERATED ALWAYS AS (total_tokens - used_tokens) STORED,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(customer_id)
+      );
+    `);
+
+    // Token transactions table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS token_transactions (
+        id SERIAL PRIMARY KEY,
+        customer_id INTEGER REFERENCES users(customer_id) ON DELETE CASCADE,
+        transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('purchase', 'usage', 'refund', 'bonus')),
+        amount INTEGER NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create trigger function for updated_at
+    await client.query(`
+      CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.updated_at = CURRENT_TIMESTAMP;
+        RETURN NEW;
+      END;
+      $$ language 'plpgsql';
+    `);
+
+    // Create trigger for user_tokens table
+    await client.query(`
+      DROP TRIGGER IF EXISTS update_user_tokens_updated_at ON user_tokens;
+      CREATE TRIGGER update_user_tokens_updated_at
+        BEFORE UPDATE ON user_tokens
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    `);
+
+    // Create function to automatically create token record for new users
+    await client.query(`
+      CREATE OR REPLACE FUNCTION create_user_tokens()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        INSERT INTO user_tokens (customer_id, total_tokens, used_tokens)
+        VALUES (NEW.customer_id, 100, 0);
+        RETURN NEW;
+      END;
+      $$ language 'plpgsql';
+    `);
+
+    // Create trigger to automatically create token record when new user is created
+    await client.query(`
+      DROP TRIGGER IF EXISTS trigger_create_user_tokens ON users;
+      CREATE TRIGGER trigger_create_user_tokens
+        AFTER INSERT ON users
+        FOR EACH ROW
+        EXECUTE FUNCTION create_user_tokens();
+    `);
+
+    // Create token records for existing users who don't have them
+    await client.query(`
+      INSERT INTO user_tokens (customer_id, total_tokens, used_tokens)
+      SELECT u.customer_id, 100, 0
+      FROM users u
+      LEFT JOIN user_tokens ut ON u.customer_id = ut.customer_id
+      WHERE ut.customer_id IS NULL;
+    `);
+
+    console.log(
+      "✅ Database tables and triggers created/verified successfully"
+    );
   } catch (error) {
     console.error("❌ Error creating tables:", error);
     throw error;

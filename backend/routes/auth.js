@@ -940,4 +940,328 @@ router.post("/select-chat-page", authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== TOKEN SYSTEM ENDPOINTS ====================
+
+// @route   GET /api/auth/tokens
+// @desc    Get user's token information
+// @access  Private
+router.get("/tokens", authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.customer_id;
+
+    const result = await query(
+      `SELECT total_tokens, used_tokens, remaining_tokens, created_at, updated_at
+       FROM user_tokens 
+       WHERE customer_id = $1`,
+      [customerId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Token bilgileri bulunamadı",
+      });
+    }
+
+    res.json({
+      status: "success",
+      data: {
+        tokens: result.rows[0],
+      },
+    });
+  } catch (error) {
+    console.error("Token retrieval error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Token bilgileri alınırken bir hata oluştu",
+    });
+  }
+});
+
+// @route   GET /api/auth/tokens/transactions
+// @desc    Get user's token transaction history
+// @access  Private
+router.get("/tokens/transactions", authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.customer_id;
+
+    const result = await query(
+      `SELECT transaction_type, amount, description, created_at
+       FROM token_transactions 
+       WHERE customer_id = $1
+       ORDER BY created_at DESC`,
+      [customerId]
+    );
+
+    res.json({
+      status: "success",
+      data: {
+        transactions: result.rows,
+        total: result.rows.length,
+      },
+    });
+  } catch (error) {
+    console.error("Token transactions retrieval error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Token işlem geçmişi alınırken bir hata oluştu",
+    });
+  }
+});
+
+// @route   POST /api/auth/tokens/use
+// @desc    Use tokens for a service
+// @access  Private
+router.post("/tokens/use", authenticateToken, async (req, res) => {
+  try {
+    const customerId = req.user.customer_id;
+    const { amount, description } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        status: "error",
+        message: "Geçerli bir token miktarı belirtmelisiniz",
+      });
+    }
+
+    // Check if user has enough tokens
+    const tokenResult = await query(
+      `SELECT total_tokens, used_tokens, remaining_tokens
+       FROM user_tokens 
+       WHERE customer_id = $1`,
+      [customerId]
+    );
+
+    if (tokenResult.rows.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Token bilgileri bulunamadı",
+      });
+    }
+
+    const currentTokens = tokenResult.rows[0];
+
+    if (currentTokens.remaining_tokens < amount) {
+      return res.status(400).json({
+        status: "error",
+        message:
+          "Yetersiz token. Mevcut token: " + currentTokens.remaining_tokens,
+      });
+    }
+
+    // Start transaction
+    await query("BEGIN");
+
+    try {
+      // Update used tokens
+      await query(
+        `UPDATE user_tokens 
+         SET used_tokens = used_tokens + $1
+         WHERE customer_id = $2`,
+        [amount, customerId]
+      );
+
+      // Record transaction
+      await query(
+        `INSERT INTO token_transactions (customer_id, transaction_type, amount, description)
+         VALUES ($1, 'usage', $2, $3)`,
+        [customerId, amount, description || "Token kullanımı"]
+      );
+
+      await query("COMMIT");
+
+      // Get updated token info
+      const updatedResult = await query(
+        `SELECT total_tokens, used_tokens, remaining_tokens
+         FROM user_tokens 
+         WHERE customer_id = $1`,
+        [customerId]
+      );
+
+      res.json({
+        status: "success",
+        message: `${amount} token başarıyla kullanıldı`,
+        data: {
+          tokens: updatedResult.rows[0],
+        },
+      });
+    } catch (error) {
+      await query("ROLLBACK");
+      throw error;
+    }
+  } catch (error) {
+    console.error("Token usage error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Token kullanımı sırasında bir hata oluştu",
+    });
+  }
+});
+
+// @route   POST /api/auth/tokens/purchase
+// @desc    Purchase additional tokens (Admin only)
+// @access  Private
+router.post(
+  "/tokens/purchase",
+  authenticateAdmin,
+  authorizeRole(["super_admin"]),
+  async (req, res) => {
+    try {
+      const { customer_id, amount, description } = req.body;
+
+      if (!customer_id || !amount || amount <= 0) {
+        return res.status(400).json({
+          status: "error",
+          message: "Geçerli bir müşteri ID ve token miktarı belirtmelisiniz",
+        });
+      }
+
+      // Check if user exists
+      const userResult = await query(
+        "SELECT customer_id FROM users WHERE customer_id = $1",
+        [customer_id]
+      );
+
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({
+          status: "error",
+          message: "Müşteri bulunamadı",
+        });
+      }
+
+      // Start transaction
+      await query("BEGIN");
+
+      try {
+        // Update total tokens
+        await query(
+          `UPDATE user_tokens 
+         SET total_tokens = total_tokens + $1
+         WHERE customer_id = $2`,
+          [amount, customer_id]
+        );
+
+        // Record transaction
+        await query(
+          `INSERT INTO token_transactions (customer_id, transaction_type, amount, description)
+         VALUES ($1, 'purchase', $2, $3)`,
+          [customer_id, amount, description || "Token satın alma"]
+        );
+
+        await query("COMMIT");
+
+        // Get updated token info
+        const updatedResult = await query(
+          `SELECT total_tokens, used_tokens, remaining_tokens
+         FROM user_tokens 
+         WHERE customer_id = $1`,
+          [customer_id]
+        );
+
+        res.json({
+          status: "success",
+          message: `${amount} token başarıyla eklendi`,
+          data: {
+            tokens: updatedResult.rows[0],
+          },
+        });
+      } catch (error) {
+        await query("ROLLBACK");
+        throw error;
+      }
+    } catch (error) {
+      console.error("Token purchase error:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Token satın alma işlemi sırasında bir hata oluştu",
+      });
+    }
+  }
+);
+
+// @route   GET /api/auth/tokens/all
+// @desc    Get all users' token information (Admin only)
+// @access  Private
+router.get(
+  "/tokens/all",
+  authenticateAdmin,
+  authorizeRole(["super_admin"]),
+  async (req, res) => {
+    try {
+      const result = await query(`
+      SELECT 
+        ut.customer_id,
+        ut.total_tokens,
+        ut.used_tokens,
+        ut.remaining_tokens,
+        ut.created_at,
+        ut.updated_at,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.company
+      FROM user_tokens ut
+      JOIN users u ON ut.customer_id = u.customer_id
+      ORDER BY ut.remaining_tokens ASC, u.created_at DESC
+    `);
+
+      res.json({
+        status: "success",
+        data: {
+          tokens: result.rows,
+          total: result.rows.length,
+        },
+      });
+    } catch (error) {
+      console.error("All tokens retrieval error:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Token bilgileri alınırken bir hata oluştu",
+      });
+    }
+  }
+);
+
+// @route   GET /api/auth/tokens/transactions/all
+// @desc    Get all token transactions (Admin only)
+// @access  Private
+router.get(
+  "/tokens/transactions/all",
+  authenticateAdmin,
+  authorizeRole(["super_admin"]),
+  async (req, res) => {
+    try {
+      const result = await query(`
+      SELECT 
+        tt.id,
+        tt.customer_id,
+        tt.transaction_type,
+        tt.amount,
+        tt.description,
+        tt.created_at,
+        u.first_name,
+        u.last_name,
+        u.email
+      FROM token_transactions tt
+      JOIN users u ON tt.customer_id = u.customer_id
+      ORDER BY tt.created_at DESC
+    `);
+
+      res.json({
+        status: "success",
+        data: {
+          transactions: result.rows,
+          total: result.rows.length,
+        },
+      });
+    } catch (error) {
+      console.error("All token transactions retrieval error:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Token işlem geçmişi alınırken bir hata oluştu",
+      });
+    }
+  }
+);
+
 module.exports = router;

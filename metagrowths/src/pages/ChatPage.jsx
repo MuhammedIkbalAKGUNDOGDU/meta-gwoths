@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
+import TokenInfo from "../components/TokenInfo";
+import TokenTransactions from "../components/TokenTransactions";
 
 const ChatPage = () => {
   const { userId } = useParams();
@@ -220,6 +222,16 @@ const ChatPage = () => {
                   📊 Rapor Oluştur
                 </button>
               </div>
+            </div>
+
+            {/* Token Information */}
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 mb-6">
+              <TokenInfo compact={true} />
+            </div>
+
+            {/* Token Transactions */}
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 mb-6">
+              <TokenTransactions compact={true} limit={3} />
             </div>
 
             {/* Project Info */}
