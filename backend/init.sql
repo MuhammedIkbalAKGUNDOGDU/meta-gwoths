@@ -209,6 +209,117 @@ CREATE TRIGGER trigger_create_user_tokens
 -- INSERT INTO users (first_name, last_name, email, password_hash, company, phone) VALUES
 -- ('Admin', 'User', 'admin@metagrowths.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/HS.iK2O', 'MetaGrowths', '+90 555 123 4567');
 
+-- Chat Rooms tablosu - Chat odaları
+CREATE TABLE IF NOT EXISTS chat_rooms (
+    id SERIAL PRIMARY KEY,
+    room_name VARCHAR(100) NOT NULL,
+    room_description TEXT,
+    created_by INTEGER REFERENCES users(customer_id) ON DELETE SET NULL,
+    room_type VARCHAR(20) DEFAULT 'customer' CHECK (room_type IN ('customer', 'support', 'general')),
+    is_active BOOLEAN DEFAULT true,
+    max_participants INTEGER DEFAULT 4,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Chat Participants tablosu - Chat odası katılımcıları
+CREATE TABLE IF NOT EXISTS chat_participants (
+    id SERIAL PRIMARY KEY,
+    room_id INTEGER REFERENCES chat_rooms(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(customer_id) ON DELETE CASCADE,
+    role VARCHAR(20) DEFAULT 'participant' CHECK (role IN ('owner', 'admin', 'participant')),
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_online BOOLEAN DEFAULT false,
+    UNIQUE(room_id, user_id)
+);
+
+-- Chat Messages tablosu - Chat mesajları
+CREATE TABLE IF NOT EXISTS chat_messages (
+    id SERIAL PRIMARY KEY,
+    room_id INTEGER REFERENCES chat_rooms(id) ON DELETE CASCADE,
+    sender_id INTEGER REFERENCES users(customer_id) ON DELETE SET NULL,
+    message_type VARCHAR(20) DEFAULT 'text' CHECK (message_type IN ('text', 'image', 'video', 'file', 'audio')),
+    message_content TEXT,
+    file_url VARCHAR(500),
+    file_name VARCHAR(255),
+    file_size INTEGER,
+    file_type VARCHAR(100),
+    is_edited BOOLEAN DEFAULT false,
+    is_deleted BOOLEAN DEFAULT false,
+    reply_to_message_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Chat room permissions tablosu - Chat odası izinleri
+CREATE TABLE IF NOT EXISTS chat_permissions (
+    id SERIAL PRIMARY KEY,
+    room_id INTEGER REFERENCES chat_rooms(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(customer_id) ON DELETE CASCADE,
+    permission_type VARCHAR(20) DEFAULT 'read_write' CHECK (permission_type IN ('read_only', 'read_write', 'admin')),
+    granted_by INTEGER REFERENCES users(customer_id) ON DELETE SET NULL,
+    granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,
+    is_active BOOLEAN DEFAULT true,
+    UNIQUE(room_id, user_id)
+);
+
+-- Indexes for chat tables
+CREATE INDEX IF NOT EXISTS idx_chat_rooms_created_by ON chat_rooms(created_by);
+CREATE INDEX IF NOT EXISTS idx_chat_rooms_room_type ON chat_rooms(room_type);
+CREATE INDEX IF NOT EXISTS idx_chat_rooms_is_active ON chat_rooms(is_active);
+CREATE INDEX IF NOT EXISTS idx_chat_participants_room_id ON chat_participants(room_id);
+CREATE INDEX IF NOT EXISTS idx_chat_participants_user_id ON chat_participants(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_participants_is_online ON chat_participants(is_online);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_room_id ON chat_messages(room_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_sender_id ON chat_messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_message_type ON chat_messages(message_type);
+CREATE INDEX IF NOT EXISTS idx_chat_permissions_room_id ON chat_permissions(room_id);
+CREATE INDEX IF NOT EXISTS idx_chat_permissions_user_id ON chat_permissions(user_id);
+
+-- Trigger oluştur - chat_rooms tablosu için
+DROP TRIGGER IF EXISTS update_chat_rooms_updated_at ON chat_rooms;
+CREATE TRIGGER update_chat_rooms_updated_at
+    BEFORE UPDATE ON chat_rooms
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger oluştur - chat_messages tablosu için
+DROP TRIGGER IF EXISTS update_chat_messages_updated_at ON chat_messages;
+CREATE TRIGGER update_chat_messages_updated_at
+    BEFORE UPDATE ON chat_messages
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to automatically create chat room for new users
+CREATE OR REPLACE FUNCTION create_user_chat_room()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO chat_rooms (room_name, room_description, created_by, room_type)
+    VALUES (
+        'Chat Odası - ' || NEW.first_name || ' ' || NEW.last_name,
+        NEW.first_name || ' ' || NEW.last_name || ' için özel chat odası',
+        NEW.customer_id,
+        'customer'
+    );
+    
+    -- Add user as owner of their chat room
+    INSERT INTO chat_participants (room_id, user_id, role)
+    VALUES (currval('chat_rooms_id_seq'), NEW.customer_id, 'owner');
+    
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Trigger to automatically create chat room when new user is created
+DROP TRIGGER IF EXISTS trigger_create_user_chat_room ON users;
+CREATE TRIGGER trigger_create_user_chat_room
+    AFTER INSERT ON users
+    FOR EACH ROW
+    EXECUTE FUNCTION create_user_chat_room();
+
 -- Tabloları listele
 \dt
 
@@ -219,3 +330,7 @@ CREATE TRIGGER trigger_create_user_tokens
 \d web_forms
 \d mobile_forms
 \d survey_status
+\d chat_rooms
+\d chat_participants
+\d chat_messages
+\d chat_permissions
