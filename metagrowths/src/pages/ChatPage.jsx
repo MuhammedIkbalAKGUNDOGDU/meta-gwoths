@@ -1,103 +1,273 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { io } from "socket.io-client";
 import Header from "../components/Header";
 import TokenInfo from "../components/TokenInfo";
 import TokenTransactions from "../components/TokenTransactions";
+import { getApiUrl, getAuthHeaders, API_ENDPOINTS } from "../config/api";
+import { useAuth } from "../utils/auth";
 
 const ChatPage = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
+  const { token, user } = useAuth();
+  const socketRef = useRef();
+  const messagesEndRef = useRef(null);
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      sender: "reklamcı",
-      message: "Merhaba! Yeni kampanya için fikirlerimizi paylaşalım.",
-      timestamp: "10:30",
-      avatar: "🎯",
-    },
-    {
-      id: 2,
-      sender: "editör",
-      message: "Harika! Hangi hedef kitleyi hedefliyoruz?",
-      timestamp: "10:32",
-      avatar: "✏️",
-    },
-    {
-      id: 3,
-      sender: "tasarımcı",
-      message: "Görsel konseptler hazırlayabilirim.",
-      timestamp: "10:35",
-      avatar: "🎨",
-    },
-    {
-      id: 4,
-      sender: "user",
-      message: "Mükemmel! Hemen başlayalım.",
-      timestamp: "10:37",
-      avatar: "👤",
-    },
-  ]);
+  const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [isVisible, setIsVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [currentRoom, setCurrentRoom] = useState(null);
+  const [participants, setParticipants] = useState([]);
+  const [userRole, setUserRole] = useState(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState([]);
 
   useEffect(() => {
     setIsVisible(true);
     checkUserAccess();
-  }, [userId]);
+    if (token) {
+      initializeChat();
+    }
+  }, [userId, token]);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, []);
 
   const checkUserAccess = () => {
-    const userInfo = localStorage.getItem("user_info");
-    if (!userInfo) {
+    if (!user) {
       navigate("/login");
       return;
     }
 
-    try {
-      const currentUser = JSON.parse(userInfo);
-      const currentUserId = currentUser.customer_id.toString();
+    const currentUserId = user.customer_id.toString();
 
-      // Sadece giriş yapan kullanıcı kendi chat sayfasına erişebilir
-      if (userId && userId !== currentUserId) {
-        console.log("🚫 Yetkisiz erişim:", {
-          requested_user_id: userId,
-          current_user_id: currentUserId,
-          user: `${currentUser.first_name} ${currentUser.last_name}`,
-        });
-        navigate("/dashboard");
-        return;
-      }
-
-      console.log("✅ Chat sayfası erişimi onaylandı:", {
-        user_id: userId,
-        current_user: `${currentUser.first_name} ${currentUser.last_name}`,
-        customer_id: currentUser.customer_id,
+    // Sadece giriş yapan kullanıcı kendi chat sayfasına erişebilir
+    if (userId && userId !== currentUserId) {
+      console.log("🚫 Yetkisiz erişim:", {
+        requested_user_id: userId,
+        current_user_id: currentUserId,
+        user: `${user.first_name} ${user.last_name}`,
       });
-    } catch (error) {
-      console.error("Kullanıcı bilgileri parse edilemedi:", error);
-      navigate("/login");
+      navigate("/dashboard");
+      return;
     }
+
+    console.log("✅ Chat sayfası erişimi onaylandı:", {
+      user_id: userId,
+      current_user: `${user.first_name} ${user.last_name}`,
+      customer_id: user.customer_id,
+    });
   };
 
   const handleSidebarToggle = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      const message = {
-        id: messages.length + 1,
-        sender: "user",
-        message: newMessage,
-        timestamp: new Date().toLocaleTimeString("tr-TR", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        avatar: "👤",
-      };
-      setMessages([...messages, message]);
-      setNewMessage("");
+  const initializeChat = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Get user's chat rooms
+      const roomsResponse = await fetch(getApiUrl(API_ENDPOINTS.chatRooms), {
+        headers: getAuthHeaders(token),
+      });
+
+      if (!roomsResponse.ok) {
+        throw new Error("Chat odaları alınamadı");
+      }
+
+      const roomsData = await roomsResponse.json();
+
+      if (roomsData.data.rooms.length === 0) {
+        setError("Henüz chat odanız bulunmuyor");
+        setLoading(false);
+        return;
+      }
+
+      // Get the first room (user's own room)
+      const userRoom = roomsData.data.rooms[0];
+      setCurrentRoom(userRoom);
+
+      // Get room details and participants
+      await loadRoomDetails(userRoom.id);
+
+      // Initialize WebSocket connection
+      initializeSocket(userRoom.id);
+    } catch (err) {
+      console.error("Chat initialization error:", err);
+      setError("Chat başlatılırken bir hata oluştu");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const loadRoomDetails = async (roomId) => {
+    try {
+      const response = await fetch(
+        getApiUrl(`${API_ENDPOINTS.chatRoomDetails}/${roomId}`),
+        {
+          headers: getAuthHeaders(token),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Oda detayları alınamadı");
+      }
+
+      const data = await response.json();
+      setCurrentRoom(data.data.room);
+      setParticipants(data.data.participants);
+      setUserRole(data.data.user_role);
+
+      // Load messages
+      await loadMessages(roomId);
+    } catch (err) {
+      console.error("Load room details error:", err);
+      setError("Oda detayları yüklenirken bir hata oluştu");
+    }
+  };
+
+  const loadMessages = async (roomId) => {
+    try {
+      const response = await fetch(
+        getApiUrl(`${API_ENDPOINTS.chatMessages}/${roomId}`),
+        {
+          headers: getAuthHeaders(token),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Mesajlar alınamadı");
+      }
+
+      const data = await response.json();
+      setMessages(data.data.messages);
+    } catch (err) {
+      console.error("Load messages error:", err);
+      setError("Mesajlar yüklenirken bir hata oluştu");
+    }
+  };
+
+  const initializeSocket = (roomId) => {
+    // Initialize socket connection
+    socketRef.current = io("http://localhost:5000", {
+      auth: {
+        token: token,
+      },
+    });
+
+    socketRef.current.on("connect", () => {
+      console.log("Socket connected");
+      socketRef.current.emit("join_room", { roomId });
+    });
+
+    socketRef.current.on("receive_message", (message) => {
+      setMessages((prev) => [...prev, message]);
+    });
+
+    socketRef.current.on("user_typing", (data) => {
+      setTypingUsers((prev) => {
+        const filtered = prev.filter((user) => user.userId !== data.userId);
+        return [...filtered, { userId: data.userId, userName: data.userName }];
+      });
+    });
+
+    socketRef.current.on("user_stopped_typing", (data) => {
+      setTypingUsers((prev) =>
+        prev.filter((user) => user.userId !== data.userId)
+      );
+    });
+
+    socketRef.current.on("user_joined", (data) => {
+      setParticipants((prev) => {
+        const existing = prev.find((p) => p.user_id === data.userId);
+        if (!existing) {
+          return [...prev, data.user];
+        }
+        return prev;
+      });
+    });
+
+    socketRef.current.on("user_left", (data) => {
+      setParticipants((prev) => prev.filter((p) => p.user_id !== data.userId));
+    });
+
+    socketRef.current.on("disconnect", () => {
+      console.log("Socket disconnected");
+    });
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !currentRoom) return;
+
+    try {
+      const response = await fetch(getApiUrl(API_ENDPOINTS.chatMessages), {
+        method: "POST",
+        headers: {
+          ...getAuthHeaders(token),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          room_id: currentRoom.id,
+          message_content: newMessage.trim(),
+          message_type: "text",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Mesaj gönderilemedi");
+      }
+
+      const data = await response.json();
+
+      // Add message to local state
+      setMessages((prev) => [...prev, data.data.message]);
+      setNewMessage("");
+
+      // Emit typing stop
+      if (socketRef.current) {
+        socketRef.current.emit("stop_typing", { roomId: currentRoom.id });
+      }
+    } catch (err) {
+      console.error("Send message error:", err);
+      setError("Mesaj gönderilirken bir hata oluştu");
+    }
+  };
+
+  const typingTimeoutRef = useRef(null);
+
+  const handleTyping = () => {
+    if (!socketRef.current || !currentRoom) return;
+
+    if (!isTyping) {
+      setIsTyping(true);
+      socketRef.current.emit("typing", { roomId: currentRoom.id });
+    }
+
+    // Clear typing indicator after 3 seconds
+    clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsTyping(false);
+      socketRef.current.emit("stop_typing", { roomId: currentRoom.id });
+    }, 3000);
   };
 
   const handleKeyPress = (e) => {
@@ -107,43 +277,43 @@ const ChatPage = () => {
     }
   };
 
-  const participants = [
-    {
-      id: 1,
-      name: "Reklamcı",
-      role: "Reklam Uzmanı",
-      avatar: "🎯",
-      status: "online",
-      color: "bg-blue-500",
-    },
-    {
-      id: 2,
-      name: "Editör",
-      role: "İçerik Editörü",
-      avatar: "✏️",
-      status: "online",
-      color: "bg-green-500",
-    },
-    {
-      id: 3,
-      name: "Tasarımcı",
-      role: "Grafik Tasarımcı",
-      avatar: "🎨",
-      status: "online",
-      color: "bg-purple-500",
-    },
-    {
-      id: 4,
-      name: "Sen",
-      role: "Proje Yöneticisi",
-      avatar: "👤",
-      status: "online",
-      color: "bg-orange-500",
-    },
-  ];
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+        <Header />
+        <div className="flex items-center justify-center h-full pt-16">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-slate-600">Chat yükleniyor...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+        <Header />
+        <div className="flex items-center justify-center h-full pt-16">
+          <div className="text-center">
+            <div className="text-red-600 text-2xl mb-4">⚠️</div>
+            <p className="text-slate-600 mb-4">{error}</p>
+            <button
+              onClick={initializeChat}
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              Tekrar Dene
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
+      <Header />
       <div className="flex h-screen pt-16">
         {/* Sidebar */}
         <div
@@ -154,7 +324,9 @@ const ChatPage = () => {
           <div className="p-6 h-full overflow-y-auto">
             {/* Sidebar Header */}
             <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-bold text-slate-800">Proje Ekibi</h2>
+              <h2 className="text-xl font-bold text-slate-800">
+                {currentRoom?.room_name || "Chat Odası"}
+              </h2>
               <button
                 onClick={handleSidebarToggle}
                 className="p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors duration-200"
@@ -178,29 +350,38 @@ const ChatPage = () => {
             {/* Participants */}
             <div className="space-y-4 mb-8">
               <h3 className="text-sm font-semibold text-slate-800 mb-3">
-                Katılımcılar
+                Katılımcılar ({participants.length}/4)
               </h3>
               {participants.map((participant) => (
                 <div
-                  key={participant.id}
+                  key={participant.user_id}
                   className="flex items-center space-x-3 p-3 bg-white rounded-xl shadow-sm border border-slate-200"
                 >
                   <div className="relative">
                     <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg">
-                      {participant.avatar}
+                      {participant.first_name?.charAt(0) || "👤"}
                     </div>
                     <div
-                      className={`absolute -bottom-1 -right-1 w-3 h-3 ${participant.color} rounded-full border-2 border-white`}
+                      className={`absolute -bottom-1 -right-1 w-3 h-3 ${
+                        participant.is_online ? "bg-green-500" : "bg-gray-400"
+                      } rounded-full border-2 border-white`}
                     ></div>
                   </div>
                   <div className="flex-1">
                     <h4 className="text-sm font-medium text-slate-800">
-                      {participant.name}
+                      {participant.first_name} {participant.last_name}
                     </h4>
-                    <p className="text-xs text-slate-600">{participant.role}</p>
+                    <p className="text-xs text-slate-600 capitalize">
+                      {participant.role}
+                    </p>
+                    {participant.company && (
+                      <p className="text-xs text-slate-500">
+                        {participant.company}
+                      </p>
+                    )}
                   </div>
                   <div className="text-xs text-green-600 font-medium">
-                    Çevrimiçi
+                    {participant.is_online ? "Çevrimiçi" : "Çevrimdışı"}
                   </div>
                 </div>
               ))}
@@ -225,10 +406,17 @@ const ChatPage = () => {
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-slate-800 mb-1">
-                  Proje Ekibi Sohbeti
+                  {currentRoom?.room_name || "Chat Odası"}
                 </h1>
                 <p className="text-slate-600">
-                  4 kişi çevrimiçi • Son mesaj 2 dakika önce
+                  {participants.filter((p) => p.is_online).length} kişi
+                  çevrimiçi
+                  {typingUsers.length > 0 && (
+                    <span className="ml-2 text-blue-600">
+                      • {typingUsers.map((u) => u.userName).join(", ")}{" "}
+                      yazıyor...
+                    </span>
+                  )}
                 </p>
               </div>
               <div className="flex items-center space-x-4">
@@ -291,42 +479,50 @@ const ChatPage = () => {
                 <div
                   key={message.id}
                   className={`flex ${
-                    message.sender === "user" ? "justify-end" : "justify-start"
+                    message.sender_id === user?.customer_id
+                      ? "justify-end"
+                      : "justify-start"
                   }`}
                 >
                   <div
                     className={`flex items-start space-x-3 max-w-xs lg:max-w-md ${
-                      message.sender === "user"
+                      message.sender_id === user?.customer_id
                         ? "flex-row-reverse space-x-reverse"
                         : ""
                     }`}
                   >
                     <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm flex-shrink-0">
-                      {message.avatar}
+                      {message.first_name?.charAt(0) || "👤"}
                     </div>
                     <div
                       className={`${
-                        message.sender === "user"
+                        message.sender_id === user?.customer_id
                           ? "bg-blue-600 text-white"
                           : "bg-white"
                       } rounded-2xl px-4 py-3 shadow-sm border border-slate-200`}
                     >
                       <div className="flex items-center space-x-2 mb-1">
                         <span className="text-xs font-medium opacity-75">
-                          {message.sender === "user"
+                          {message.sender_id === user?.customer_id
                             ? "Sen"
-                            : message.sender.charAt(0).toUpperCase() +
-                              message.sender.slice(1)}
+                            : `${message.first_name} ${message.last_name}`}
                         </span>
                         <span className="text-xs opacity-60">
-                          {message.timestamp}
+                          {new Date(message.created_at).toLocaleTimeString(
+                            "tr-TR",
+                            {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )}
                         </span>
                       </div>
-                      <p className="text-sm">{message.message}</p>
+                      <p className="text-sm">{message.message_content}</p>
                     </div>
                   </div>
                 </div>
               ))}
+              <div ref={messagesEndRef} />
             </div>
           </div>
 
@@ -336,7 +532,10 @@ const ChatPage = () => {
               <div className="flex-1">
                 <textarea
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={(e) => {
+                    setNewMessage(e.target.value);
+                    handleTyping();
+                  }}
                   onKeyPress={handleKeyPress}
                   placeholder="Mesajınızı yazın..."
                   className="w-full p-4 border border-slate-200 rounded-2xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"

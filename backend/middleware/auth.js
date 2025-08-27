@@ -93,7 +93,107 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
+// Admin authentication middleware
+const authenticateAdmin = async (req, res, next) => {
+  try {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader && authHeader.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({
+        status: "error",
+        message: "Admin access token required",
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const result = await query(
+      "SELECT customer_id, first_name, last_name, email, company, phone, is_active FROM users WHERE customer_id = $1",
+      [decoded.customer_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        status: "error",
+        message: "Invalid admin token - user not found",
+      });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.is_active) {
+      return res.status(401).json({
+        status: "error",
+        message: "Admin account is deactivated",
+      });
+    }
+
+    // For now, we'll consider all users as potential admins
+    // In a real application, you'd have a role field in the users table
+    req.user = user;
+    next();
+  } catch (error) {
+    if (error.name === "JsonWebTokenError") {
+      return res.status(401).json({
+        status: "error",
+        message: "Invalid admin token",
+      });
+    }
+
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        status: "error",
+        message: "Admin token expired",
+      });
+    }
+
+    console.error("Admin auth middleware error:", error);
+    return res.status(500).json({
+      status: "error",
+      message: "Admin authentication error",
+    });
+  }
+};
+
+// Role authorization middleware
+const authorizeRole = (allowedRoles) => {
+  return (req, res, next) => {
+    try {
+      // For now, we'll allow all authenticated users
+      // In a real application, you'd check the user's role from the database
+      if (!req.user) {
+        return res.status(403).json({
+          status: "error",
+          message: "Access denied - authentication required",
+        });
+      }
+
+      // For now, we'll consider all users as super_admin
+      // This should be replaced with actual role checking
+      const userRole = "super_admin"; // This should come from the database
+
+      if (allowedRoles.includes(userRole)) {
+        next();
+      } else {
+        return res.status(403).json({
+          status: "error",
+          message: "Access denied - insufficient permissions",
+        });
+      }
+    } catch (error) {
+      console.error("Role authorization error:", error);
+      return res.status(500).json({
+        status: "error",
+        message: "Authorization error",
+      });
+    }
+  };
+};
+
 module.exports = {
   authenticateToken,
   optionalAuth,
+  authenticateAdmin,
+  authorizeRole,
 };

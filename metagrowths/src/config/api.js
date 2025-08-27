@@ -32,6 +32,14 @@ export const API_ENDPOINTS = {
   purchaseTokens: "/auth/tokens/purchase",
   allTokens: "/auth/tokens/all",
   allTokenTransactions: "/auth/tokens/transactions/all",
+  // Chat endpoints
+  chatRooms: "/chat/rooms",
+  chatRoomsAll: "/chat/rooms/all",
+  chatRoomDetails: "/chat/rooms",
+  chatMessages: "/chat/messages",
+  joinChatRoom: "/chat/rooms",
+  leaveChatRoom: "/chat/rooms",
+  removeParticipant: "/chat/rooms",
 
   // Health check
   health: "/health",

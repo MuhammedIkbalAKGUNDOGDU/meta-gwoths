@@ -2,13 +2,18 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const http = require("http");
 require("dotenv").config({ path: "./config.env" });
 
 // Import routes
 const authRoutes = require("./routes/auth");
+const chatRoutes = require("./routes/chat");
 
 // Import database connection
 const { connectDB } = require("./config/database");
+
+// Import socket.io
+const { initializeSocket } = require("./socket");
 
 const app = express();
 
@@ -26,6 +31,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/chat", chatRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
@@ -63,10 +69,17 @@ const startServer = async () => {
     // Connect to database
     await connectDB();
 
-    app.listen(PORT, () => {
+    // Create HTTP server
+    const server = http.createServer(app);
+
+    // Initialize Socket.io
+    initializeSocket(server);
+
+    server.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 Environment: ${process.env.NODE_ENV}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
+      console.log(`🔌 WebSocket server ready`);
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error);
