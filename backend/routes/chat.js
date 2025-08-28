@@ -1,9 +1,11 @@
 const express = require("express");
 const router = express.Router();
+const jwt = require("jsonwebtoken");
 const { query } = require("../config/database");
 const {
   authenticateToken,
   authenticateAdmin,
+  authenticateChatAdmin,
   authorizeRole,
 } = require("../middleware/auth");
 
@@ -105,27 +107,54 @@ router.get(
 );
 
 // @route   GET /api/chat/rooms/:roomId
-// @desc    Get specific chat room details
+// @desc    Get specific chat room details (Chat Admin - can access any room, Normal User - can access own room)
 // @access  Private
-router.get("/rooms/:roomId", authenticateToken, async (req, res) => {
+router.get("/rooms/:roomId", async (req, res) => {
   try {
     const { roomId } = req.params;
-    const customerId = req.user.customer_id;
 
-    // Check if user has access to this room
-    const accessCheck = await query(
-      `
-      SELECT cp.role, cp.is_online
-      FROM chat_participants cp
-      WHERE cp.room_id = $1 AND cp.user_id = $2
-    `,
-      [roomId, customerId]
-    );
+    // Authentication logic
+    let user = null;
+    let isChatAdmin = false;
 
-    if (accessCheck.rows.length === 0) {
+    try {
+      const authHeader = req.headers["authorization"];
+      const token = authHeader && authHeader.split(" ")[1];
+
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const result = await query(
+          "SELECT customer_id, first_name, last_name, email, company, phone, role, is_active FROM users WHERE customer_id = $1",
+          [decoded.customer_id]
+        );
+
+        if (result.rows.length > 0 && result.rows[0].is_active) {
+          user = result.rows[0];
+          const allowedRoles = ["advertiser", "editor", "admin", "super_admin"];
+          isChatAdmin = allowedRoles.includes(user.role);
+        }
+      }
+    } catch (error) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    const customerId = user.customer_id;
+
+    // Access control: Normal users can only access their own room (roomId = customerId)
+    if (!isChatAdmin && parseInt(roomId) !== customerId) {
       return res.status(403).json({
         status: "error",
-        message: "Bu chat odasına erişim izniniz yok",
+        message: "Access denied - you can only access your own chat room",
       });
     }
 
@@ -212,25 +241,53 @@ router.get("/rooms/:roomId", authenticateToken, async (req, res) => {
 // @route   GET /api/chat/messages/:roomId
 // @desc    Get messages for a specific chat room
 // @access  Private
-router.get("/messages/:roomId", authenticateToken, async (req, res) => {
+router.get("/messages/:roomId", async (req, res) => {
   try {
     const { roomId } = req.params;
     const { limit = 50, offset = 0 } = req.query;
-    const customerId = req.user.customer_id;
 
-    // Check if user has access to this room
-    const accessCheck = await query(
-      `
-      SELECT 1 FROM chat_participants 
-      WHERE room_id = $1 AND user_id = $2
-    `,
-      [roomId, customerId]
-    );
+    // Authentication logic
+    let user = null;
+    let isChatAdmin = false;
 
-    if (accessCheck.rows.length === 0) {
+    try {
+      const authHeader = req.headers["authorization"];
+      const token = authHeader && authHeader.split(" ")[1];
+
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const result = await query(
+          "SELECT customer_id, first_name, last_name, email, company, phone, role, is_active FROM users WHERE customer_id = $1",
+          [decoded.customer_id]
+        );
+
+        if (result.rows.length > 0 && result.rows[0].is_active) {
+          user = result.rows[0];
+          const allowedRoles = ["advertiser", "editor", "admin", "super_admin"];
+          isChatAdmin = allowedRoles.includes(user.role);
+        }
+      }
+    } catch (error) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    const customerId = user.customer_id;
+
+    // Access control: Normal users can only access their own room (roomId = customerId)
+    if (!isChatAdmin && parseInt(roomId) !== customerId) {
       return res.status(403).json({
         status: "error",
-        message: "Bu chat odasına erişim izniniz yok",
+        message: "Access denied - you can only access your own chat room",
       });
     }
 
@@ -288,7 +345,7 @@ router.get("/messages/:roomId", authenticateToken, async (req, res) => {
 // @route   POST /api/chat/messages
 // @desc    Send a message to a chat room
 // @access  Private
-router.post("/messages", authenticateToken, async (req, res) => {
+router.post("/messages", async (req, res) => {
   try {
     const {
       room_id,
@@ -305,39 +362,8 @@ router.post("/messages", authenticateToken, async (req, res) => {
       });
     }
 
-    // Check if user has access to this room
-    const accessCheck = await query(
-      `
-      SELECT cp.role, cperm.permission_type
-      FROM chat_participants cp
-      LEFT JOIN chat_permissions cperm ON cp.room_id = cperm.room_id AND cp.user_id = cperm.user_id
-      WHERE cp.room_id = $1 AND cp.user_id = $2
-    `,
-      [room_id, customerId]
-    );
-
-    if (accessCheck.rows.length === 0) {
-      return res.status(403).json({
-        status: "error",
-        message: "Bu chat odasına erişim izniniz yok",
-      });
-    }
-
-    const userRole = accessCheck.rows[0].role;
-    const permissionType = accessCheck.rows[0].permission_type;
-
-    // Check if user has write permission
-    if (
-      userRole !== "owner" &&
-      userRole !== "admin" &&
-      permissionType !== "read_write" &&
-      permissionType !== "admin"
-    ) {
-      return res.status(403).json({
-        status: "error",
-        message: "Bu odada mesaj gönderme izniniz yok",
-      });
-    }
+    // Chat admin kullanıcıları herhangi bir odada mesaj gönderebilir
+    // Erişim kontrolü kaldırıldı
 
     // Insert message
     const result = await query(
@@ -557,7 +583,7 @@ router.delete("/messages/:messageId", authenticateToken, async (req, res) => {
 // @route   POST /api/chat/rooms/:roomId/join
 // @desc    Join a chat room
 // @access  Private
-router.post("/rooms/:roomId/join", authenticateToken, async (req, res) => {
+router.post("/rooms/:roomId/join", authenticateChatAdmin, async (req, res) => {
   try {
     const { roomId } = req.params;
     const customerId = req.user.customer_id;
@@ -565,11 +591,11 @@ router.post("/rooms/:roomId/join", authenticateToken, async (req, res) => {
     // Check if room exists and is active
     const roomCheck = await query(
       `
-      SELECT id, max_participants, COUNT(cp.user_id) as current_participants
+      SELECT cr.id, cr.max_participants, COUNT(cp.user_id) as current_participants
       FROM chat_rooms cr
       LEFT JOIN chat_participants cp ON cr.id = cp.room_id
       WHERE cr.id = $1 AND cr.is_active = true
-      GROUP BY cr.id
+      GROUP BY cr.id, cr.max_participants
     `,
       [roomId]
     );
@@ -594,8 +620,8 @@ router.post("/rooms/:roomId/join", authenticateToken, async (req, res) => {
     // Check if user is already a participant
     const participantCheck = await query(
       `
-      SELECT id FROM chat_participants 
-      WHERE room_id = $1 AND user_id = $2
+      SELECT cp.id FROM chat_participants cp
+      WHERE cp.room_id = $1 AND cp.user_id = $2
     `,
       [roomId, customerId]
     );
@@ -657,7 +683,7 @@ router.post("/rooms/:roomId/join", authenticateToken, async (req, res) => {
 // @route   POST /api/chat/rooms/:roomId/leave
 // @desc    Leave a chat room
 // @access  Private
-router.post("/rooms/:roomId/leave", authenticateToken, async (req, res) => {
+router.post("/rooms/:roomId/leave", authenticateChatAdmin, async (req, res) => {
   try {
     const { roomId } = req.params;
     const customerId = req.user.customer_id;

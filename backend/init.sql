@@ -228,7 +228,7 @@ CREATE TABLE IF NOT EXISTS chat_participants (
     id SERIAL PRIMARY KEY,
     room_id INTEGER REFERENCES chat_rooms(id) ON DELETE CASCADE,
     user_id INTEGER REFERENCES users(customer_id) ON DELETE CASCADE,
-    role VARCHAR(20) DEFAULT 'participant' CHECK (role IN ('owner', 'admin', 'participant')),
+    role VARCHAR(20) DEFAULT 'participant' CHECK (role IN ('owner', 'admin', 'editor', 'advertiser', 'participant')),
     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_online BOOLEAN DEFAULT false,

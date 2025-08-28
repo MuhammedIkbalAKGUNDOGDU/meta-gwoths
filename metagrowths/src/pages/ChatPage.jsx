@@ -6,6 +6,12 @@ import TokenInfo from "../components/TokenInfo";
 import TokenTransactions from "../components/TokenTransactions";
 import { getApiUrl, getAuthHeaders, API_ENDPOINTS } from "../config/api";
 import { useAuth } from "../utils/auth";
+import {
+  isChatAdminAuthenticated,
+  getChatAdminToken,
+  getChatAdminHeaders,
+  getChatAdminUser,
+} from "../utils/chatAdminAuth";
 
 const ChatPage = () => {
   const { userId } = useParams();
@@ -47,6 +53,19 @@ const ChatPage = () => {
   }, []);
 
   const checkUserAccess = () => {
+    // Chat admin kullanıcısı kontrolü
+    if (isChatAdminAuthenticated()) {
+      const chatAdminUser = getChatAdminUser();
+      console.log("✅ Chat Admin erişimi:", {
+        room_id: userId,
+        current_user: `${chatAdminUser.first_name} ${chatAdminUser.last_name}`,
+        customer_id: chatAdminUser.customer_id,
+        role: chatAdminUser.role,
+      });
+      return;
+    }
+
+    // Normal kullanıcı kontrolü
     if (!user) {
       navigate("/login");
       return;
@@ -91,12 +110,25 @@ const ChatPage = () => {
       setLoading(true);
       setError(null);
 
-      // Eğer userId bir sayı ise (oda ID'si), direkt o odaya bağlan
-      if (userId && !isNaN(userId)) {
-        const roomId = parseInt(userId);
-        await loadRoomDetails(roomId);
-        initializeSocket(roomId);
-        return;
+      // Chat admin kullanıcısı kontrolü
+      if (isChatAdminAuthenticated()) {
+        if (userId && !isNaN(userId)) {
+          const roomId = parseInt(userId);
+          await loadRoomDetails(roomId);
+          initializeSocket(roomId);
+          return;
+        }
+      }
+
+      // Normal kullanıcı kontrolü
+      if (token) {
+        // Eğer userId bir sayı ise (oda ID'si), direkt o odaya bağlan
+        if (userId && !isNaN(userId)) {
+          const roomId = parseInt(userId);
+          await loadRoomDetails(roomId);
+          initializeSocket(roomId);
+          return;
+        }
       }
 
       // Get user's chat rooms
@@ -135,10 +167,31 @@ const ChatPage = () => {
 
   const loadRoomDetails = async (roomId) => {
     try {
+      // Chat admin kullanıcısı için özel headers
+      let headers;
+      if (isChatAdminAuthenticated()) {
+        const chatAdminToken = getChatAdminToken();
+        headers = getChatAdminHeaders(chatAdminToken);
+        console.log("🔍 Chat Admin Debug:", {
+          isAuthenticated: isChatAdminAuthenticated(),
+          token: chatAdminToken
+            ? `${chatAdminToken.substring(0, 20)}...`
+            : "null",
+          user: getChatAdminUser(),
+          headers: headers,
+        });
+      } else {
+        headers = getAuthHeaders(token);
+        console.log("🔍 Normal User Debug:", {
+          token: token ? `${token.substring(0, 20)}...` : "null",
+          user: user,
+        });
+      }
+
       const response = await fetch(
         getApiUrl(`${API_ENDPOINTS.chatRoomDetails}/${roomId}`),
         {
-          headers: getAuthHeaders(token),
+          headers: headers,
         }
       );
 
@@ -161,10 +214,19 @@ const ChatPage = () => {
 
   const loadMessages = async (roomId) => {
     try {
+      // Chat admin kullanıcısı için özel headers
+      let headers;
+      if (isChatAdminAuthenticated()) {
+        const chatAdminToken = getChatAdminToken();
+        headers = getChatAdminHeaders(chatAdminToken);
+      } else {
+        headers = getAuthHeaders(token);
+      }
+
       const response = await fetch(
         getApiUrl(`${API_ENDPOINTS.chatMessages}/${roomId}`),
         {
-          headers: getAuthHeaders(token),
+          headers: headers,
         }
       );
 
@@ -181,10 +243,18 @@ const ChatPage = () => {
   };
 
   const initializeSocket = (roomId) => {
+    // Chat admin kullanıcısı için özel token
+    let authToken;
+    if (isChatAdminAuthenticated()) {
+      authToken = getChatAdminToken();
+    } else {
+      authToken = token;
+    }
+
     // Initialize socket connection
     socketRef.current = io("http://localhost:5000", {
       auth: {
-        token: token,
+        token: authToken,
       },
     });
 
@@ -237,12 +307,24 @@ const ChatPage = () => {
     if (!newMessage.trim() || !currentRoom) return;
 
     try {
-      const response = await fetch(getApiUrl(API_ENDPOINTS.chatMessages), {
-        method: "POST",
-        headers: {
+      // Chat admin kullanıcısı için özel headers
+      let headers;
+      if (isChatAdminAuthenticated()) {
+        const chatAdminToken = getChatAdminToken();
+        headers = {
+          ...getChatAdminHeaders(chatAdminToken),
+          "Content-Type": "application/json",
+        };
+      } else {
+        headers = {
           ...getAuthHeaders(token),
           "Content-Type": "application/json",
-        },
+        };
+      }
+
+      const response = await fetch(getApiUrl(API_ENDPOINTS.chatMessages), {
+        method: "POST",
+        headers: headers,
         body: JSON.stringify({
           room_id: currentRoom.id,
           message_content: newMessage.trim(),
@@ -493,53 +575,56 @@ const ChatPage = () => {
           {/* Messages Area */}
           <div className="flex-1 p-6 overflow-y-auto">
             <div className="space-y-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${
-                    message.sender_id === user?.customer_id
-                      ? "justify-end"
-                      : "justify-start"
-                  }`}
-                >
+              {messages.map((message) => {
+                // Chat admin kullanıcısı için özel kontrol
+                const currentUser = isChatAdminAuthenticated()
+                  ? getChatAdminUser()
+                  : user;
+                const isOwnMessage =
+                  message.sender_id === currentUser?.customer_id;
+
+                return (
                   <div
-                    className={`flex items-start space-x-3 max-w-xs lg:max-w-md ${
-                      message.sender_id === user?.customer_id
-                        ? "flex-row-reverse space-x-reverse"
-                        : ""
+                    key={message.id}
+                    className={`flex ${
+                      isOwnMessage ? "justify-end" : "justify-start"
                     }`}
                   >
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm flex-shrink-0">
-                      {message.first_name?.charAt(0) || "👤"}
-                    </div>
                     <div
-                      className={`${
-                        message.sender_id === user?.customer_id
-                          ? "bg-blue-600 text-white"
-                          : "bg-white"
-                      } rounded-2xl px-4 py-3 shadow-sm border border-slate-200`}
+                      className={`flex items-start space-x-3 max-w-xs lg:max-w-md ${
+                        isOwnMessage ? "flex-row-reverse space-x-reverse" : ""
+                      }`}
                     >
-                      <div className="flex items-center space-x-2 mb-1">
-                        <span className="text-xs font-medium opacity-75">
-                          {message.sender_id === user?.customer_id
-                            ? "Sen"
-                            : `${message.first_name} ${message.last_name}`}
-                        </span>
-                        <span className="text-xs opacity-60">
-                          {new Date(message.created_at).toLocaleTimeString(
-                            "tr-TR",
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }
-                          )}
-                        </span>
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm flex-shrink-0">
+                        {message.first_name?.charAt(0) || "👤"}
                       </div>
-                      <p className="text-sm">{message.message_content}</p>
+                      <div
+                        className={`${
+                          isOwnMessage ? "bg-blue-600 text-white" : "bg-white"
+                        } rounded-2xl px-4 py-3 shadow-sm border border-slate-200`}
+                      >
+                        <div className="flex items-center space-x-2 mb-1">
+                          <span className="text-xs font-medium opacity-75">
+                            {isOwnMessage
+                              ? "Sen"
+                              : `${message.first_name} ${message.last_name}`}
+                          </span>
+                          <span className="text-xs opacity-60">
+                            {new Date(message.created_at).toLocaleTimeString(
+                              "tr-TR",
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
+                          </span>
+                        </div>
+                        <p className="text-sm">{message.message_content}</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
           </div>
