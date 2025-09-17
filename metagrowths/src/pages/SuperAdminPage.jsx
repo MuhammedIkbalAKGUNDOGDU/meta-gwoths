@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { getApiUrl, API_ENDPOINTS } from "../config/api";
 import {
@@ -13,14 +12,41 @@ import CreateChatUserForm from "../components/CreateChatUserForm";
 
 const SuperAdminPage = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("overview"); // "overview", "customers", "surveys", "forms", "chat-users"
+  const [activeTab, setActiveTab] = useState("overview"); // "overview", "customers", "surveys", "chat-users"
   const [customers, setCustomers] = useState([]);
   const [surveys, setSurveys] = useState([]);
-  const [webForms, setWebForms] = useState([]);
-  const [mobileForms, setMobileForms] = useState([]);
   const [chatUsers, setChatUsers] = useState([]);
+  const [selectedSurvey, setSelectedSurvey] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+
+  const questions = [
+    "İşletmenizin adı nedir?",
+    "Sosyal medya hesap linklerinizi paylaşır mısınız?",
+    "Web siteniz veya online satış platformunuz var mı?",
+    "Hangi şehir ve semtte hizmet veriyorsunuz?",
+    "Ürün/hizmet kategoriniz nedir?",
+    "Aylık ortalama reklam bütçeniz nedir?",
+    "Hedeflediğiniz müşteri kitlesi kimdir?",
+    "Şu anda aktif olarak reklam veriyor musunuz?",
+    "Daha önce reklam verdiyseniz, hangi platformları kullandınız?",
+    "Daha önceki reklamlarınızdan memnun kaldınız mı?",
+    "Şu anda içerik üretimi yapıyor musunuz?",
+    "Profesyonel fotoğraf/video çekimi yaptırıyor musunuz?",
+    "Ürün/hizmet fiyat aralığınız nedir?",
+    "En çok sattığınız 3 ürün veya hizmet nedir?",
+    "Hangi günler kampanya yapmayı tercih ediyorsunuz?",
+    "Şu an müşterileriniz sizi neden tercih ediyor?",
+    "Markanızın ön plana çıkmasını istediğiniz özellikleri nelerdir?",
+    "Müşterilerin en çok sorduğu sorular nelerdir?",
+    "Şu anda stok durumunuz nasıl?",
+    "Sipariş süreçleriniz nasıl işliyor?",
+    "Ürün teslimatını nasıl yapıyorsunuz?",
+    "Çalıştığınız özel kampanya dönemleri var mı?",
+    "Müşteri yorumlarınızı topladığınız platformlar var mı?",
+    "Şu anda sizi zorlayan en büyük problem nedir?",
+    "Bizim size nasıl bir katkı sağlamamızı beklersiniz?",
+  ];
 
   useEffect(() => {
     if (!isAdminAuthenticated()) {
@@ -33,13 +59,7 @@ const SuperAdminPage = () => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      await Promise.all([
-        fetchCustomers(),
-        fetchSurveys(),
-        fetchWebForms(),
-        fetchMobileForms(),
-        fetchChatUsers(),
-      ]);
+      await Promise.all([fetchCustomers(), fetchSurveys(), fetchChatUsers()]);
     } catch (error) {
       console.error("Data fetch error:", error);
     } finally {
@@ -81,40 +101,6 @@ const SuperAdminPage = () => {
     }
   };
 
-  const fetchWebForms = async () => {
-    try {
-      const token = getAdminToken();
-      const response = await fetch(getApiUrl("/auth/forms/web/all"), {
-        method: "GET",
-        headers: getAdminHeaders(token),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setWebForms(data.data.forms || []);
-      }
-    } catch (error) {
-      console.error("Web forms fetch error:", error);
-    }
-  };
-
-  const fetchMobileForms = async () => {
-    try {
-      const token = getAdminToken();
-      const response = await fetch(getApiUrl("/auth/forms/mobile/all"), {
-        method: "GET",
-        headers: getAdminHeaders(token),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setMobileForms(data.data.forms || []);
-      }
-    } catch (error) {
-      console.error("Mobile forms fetch error:", error);
-    }
-  };
-
   const fetchChatUsers = async () => {
     try {
       const token = getAdminToken();
@@ -138,6 +124,14 @@ const SuperAdminPage = () => {
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString("tr-TR");
+  };
+
+  const openSurveyModal = (survey) => {
+    setSelectedSurvey(survey);
+  };
+
+  const closeSurveyModal = () => {
+    setSelectedSurvey(null);
   };
 
   const getStatusColor = (status) => {
@@ -188,8 +182,7 @@ const SuperAdminPage = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
-        <Header />
-        <div className="flex items-center justify-center min-h-screen pt-16">
+        <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-slate-600">Veriler yükleniyor...</p>
@@ -202,9 +195,7 @@ const SuperAdminPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
-      <Header />
-
-      <div className="max-w-7xl mx-auto p-6 pt-24">
+      <div className="max-w-7xl mx-auto p-6 pt-6">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -253,16 +244,6 @@ const SuperAdminPage = () => {
               }`}
             >
               Anketler ({surveys.length})
-            </button>
-            <button
-              onClick={() => setActiveTab("forms")}
-              className={`px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
-                activeTab === "forms"
-                  ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg"
-                  : "text-slate-600 hover:text-slate-800"
-              }`}
-            >
-              Formlar ({webForms.length + mobileForms.length})
             </button>
             <button
               onClick={() => setActiveTab("chat-users")}
@@ -364,9 +345,7 @@ const SuperAdminPage = () => {
                   <p className="text-sm font-medium text-slate-600">
                     Web Formları
                   </p>
-                  <p className="text-2xl font-bold text-slate-800">
-                    {webForms.length}
-                  </p>
+                  <p className="text-2xl font-bold text-slate-800">0</p>
                 </div>
               </div>
             </div>
@@ -392,9 +371,7 @@ const SuperAdminPage = () => {
                   <p className="text-sm font-medium text-slate-600">
                     Mobil Formları
                   </p>
-                  <p className="text-2xl font-bold text-slate-800">
-                    {mobileForms.length}
-                  </p>
+                  <p className="text-2xl font-bold text-slate-800">0</p>
                 </div>
               </div>
             </div>
@@ -502,7 +479,8 @@ const SuperAdminPage = () => {
                 {surveys.map((survey) => (
                   <div
                     key={survey.id}
-                    className="bg-slate-50 rounded-xl p-6 hover:shadow-lg transition-all duration-300"
+                    onClick={() => openSurveyModal(survey)}
+                    className="bg-slate-50 rounded-xl p-6 hover:shadow-lg transition-all duration-300 cursor-pointer"
                   >
                     <div className="flex items-center justify-between">
                       <div>
@@ -535,102 +513,6 @@ const SuperAdminPage = () => {
                 ))}
               </div>
             )}
-          </div>
-        )}
-
-        {activeTab === "forms" && (
-          <div className="space-y-8">
-            {/* Web Forms */}
-            <div className="bg-white rounded-3xl shadow-2xl p-8">
-              <h2 className="text-2xl font-bold text-slate-800 mb-6">
-                Web Geliştirme Formları ({webForms.length})
-              </h2>
-
-              {webForms.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-slate-600">Henüz web formu bulunmuyor</p>
-                </div>
-              ) : (
-                <div className="grid gap-4">
-                  {webForms.slice(0, 5).map((form) => (
-                    <div
-                      key={form.id}
-                      className="bg-slate-50 rounded-xl p-6 hover:shadow-lg transition-all duration-300"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-lg font-semibold text-slate-800">
-                            {form.name} {form.surname}
-                          </h3>
-                          <p className="text-slate-600">{form.email}</p>
-                          <p className="text-sm text-slate-500">
-                            Bütçe: {form.budget}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-slate-500">
-                            Tarih: {formatDate(form.created_at)}
-                          </p>
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                              form.status
-                            )}`}
-                          >
-                            {form.status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Mobile Forms */}
-            <div className="bg-white rounded-3xl shadow-2xl p-8">
-              <h2 className="text-2xl font-bold text-slate-800 mb-6">
-                Mobil Uygulama Formları ({mobileForms.length})
-              </h2>
-
-              {mobileForms.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-slate-600">Henüz mobil formu bulunmuyor</p>
-                </div>
-              ) : (
-                <div className="grid gap-4">
-                  {mobileForms.slice(0, 5).map((form) => (
-                    <div
-                      key={form.id}
-                      className="bg-slate-50 rounded-xl p-6 hover:shadow-lg transition-all duration-300"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-lg font-semibold text-slate-800">
-                            {form.name} {form.surname}
-                          </h3>
-                          <p className="text-slate-600">{form.email}</p>
-                          <p className="text-sm text-slate-500">
-                            Bütçe: {form.budget}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm text-slate-500">
-                            Tarih: {formatDate(form.created_at)}
-                          </p>
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                              form.status
-                            )}`}
-                          >
-                            {form.status}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         )}
 
@@ -757,6 +639,90 @@ const SuperAdminPage = () => {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* Survey Detail Modal */}
+        {selectedSurvey && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+              <div className="p-8">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-3xl font-bold text-slate-800">
+                    Anket Detayları
+                  </h2>
+                  <button
+                    onClick={closeSurveyModal}
+                    className="text-slate-400 hover:text-slate-600 transition-colors duration-200"
+                  >
+                    <svg
+                      className="w-8 h-8"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+
+                <div className="mb-6 p-4 bg-blue-50 rounded-xl">
+                  <h3 className="text-xl font-semibold text-slate-800 mb-2">
+                    {selectedSurvey.first_name} {selectedSurvey.last_name}
+                  </h3>
+                  <p className="text-slate-600">{selectedSurvey.email}</p>
+                  <p className="text-sm text-slate-500">
+                    Tarih: {formatDate(selectedSurvey.created_at)}
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  {questions.map((question, index) => {
+                    const answer = selectedSurvey[`answer_${index + 1}`];
+
+                    if (
+                      !answer ||
+                      (Array.isArray(answer) && answer.length === 0)
+                    ) {
+                      return null;
+                    }
+
+                    return (
+                      <div
+                        key={index}
+                        className="bg-white rounded-xl p-4 shadow-sm border border-slate-200"
+                      >
+                        <h4 className="font-semibold text-slate-800 mb-2">
+                          {index + 1}. {question}
+                        </h4>
+                        <div className="bg-slate-50 rounded-lg p-3">
+                          {Array.isArray(answer) ? (
+                            <div className="space-y-1">
+                              {answer.map((item, i) => (
+                                <div
+                                  key={i}
+                                  className="flex items-center space-x-2"
+                                >
+                                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                  <span className="text-slate-700">{item}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-slate-700">{answer}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
         )}

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { getApiUrl, API_ENDPOINTS } from "../config/api";
 import {
@@ -12,8 +11,7 @@ import {
 
 const AdminPanelPage = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("customers"); // "customers", "surveys"
-  const [customers, setCustomers] = useState([]);
+  const [activeTab, setActiveTab] = useState("surveys"); // "surveys"
   const [surveys, setSurveys] = useState([]);
   const [selectedSurvey, setSelectedSurvey] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -58,28 +56,11 @@ const AdminPanelPage = () => {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      await Promise.all([fetchCustomers(), fetchSurveys()]);
+      await fetchSurveys();
     } catch (error) {
       console.error("Data fetch error:", error);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const fetchCustomers = async () => {
-    try {
-      const token = getAdminToken();
-      const response = await fetch(getApiUrl("/auth/customers/all"), {
-        method: "GET",
-        headers: getAdminHeaders(token),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setCustomers(data.data.customers || []);
-      }
-    } catch (error) {
-      console.error("Customers fetch error:", error);
     }
   };
 
@@ -115,8 +96,7 @@ const AdminPanelPage = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
-        <Header />
-        <div className="flex items-center justify-center min-h-screen pt-16">
+        <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-slate-600">Veriler yükleniyor...</p>
@@ -129,9 +109,7 @@ const AdminPanelPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
-      <Header />
-
-      <div className="max-w-7xl mx-auto p-6 pt-24">
+      <div className="max-w-7xl mx-auto p-6 pt-6">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -158,16 +136,6 @@ const AdminPanelPage = () => {
         <div className="flex justify-center mb-8">
           <div className="bg-white rounded-xl p-1 shadow-lg">
             <button
-              onClick={() => setActiveTab("customers")}
-              className={`px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
-                activeTab === "customers"
-                  ? "bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg"
-                  : "text-slate-600 hover:text-slate-800"
-              }`}
-            >
-              Müşteriler ({customers.length})
-            </button>
-            <button
               onClick={() => setActiveTab("surveys")}
               className={`px-6 py-3 rounded-lg font-medium transition-all duration-300 ${
                 activeTab === "surveys"
@@ -181,76 +149,6 @@ const AdminPanelPage = () => {
         </div>
 
         {/* Content */}
-        {activeTab === "customers" && (
-          <div className="bg-white rounded-3xl shadow-2xl p-8">
-            <h2 className="text-2xl font-bold text-slate-800 mb-6">
-              Müşteri Listesi
-            </h2>
-
-            {customers.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg
-                    className="w-8 h-8 text-slate-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
-                    />
-                  </svg>
-                </div>
-                <p className="text-slate-600">Henüz müşteri bulunmuyor</p>
-              </div>
-            ) : (
-              <div className="grid gap-4">
-                {customers.map((customer) => (
-                  <div
-                    key={customer.customer_id}
-                    className="bg-slate-50 rounded-xl p-6 hover:shadow-lg transition-all duration-300"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="text-lg font-semibold text-slate-800">
-                          {customer.first_name} {customer.last_name}
-                        </h3>
-                        <p className="text-slate-600">{customer.email}</p>
-                        {customer.company && (
-                          <p className="text-sm text-slate-500">
-                            Şirket: {customer.company}
-                          </p>
-                        )}
-                        {customer.phone && (
-                          <p className="text-sm text-slate-500">
-                            Telefon: {customer.phone}
-                          </p>
-                        )}
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-slate-500">
-                          Kayıt: {formatDate(customer.created_at)}
-                        </p>
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            customer.is_active
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {customer.is_active ? "Aktif" : "Pasif"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
         {activeTab === "surveys" && (
           <div className="bg-white rounded-3xl shadow-2xl p-8">
