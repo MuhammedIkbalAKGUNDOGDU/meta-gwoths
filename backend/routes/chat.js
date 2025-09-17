@@ -1,6 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const jwt = require("jsonwebtoken");
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
 const { query } = require("../config/database");
 const {
   authenticateToken,
@@ -8,6 +11,58 @@ const {
   authenticateChatAdmin,
   authorizeRole,
 } = require("../middleware/auth");
+
+// Multer konfigürasyonu - kullanıcı bazlı medya yükleme için
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    // Kullanıcı ID'sini al (token'dan)
+    let userId = null;
+    try {
+      const authHeader = req.headers["authorization"];
+      const token = authHeader && authHeader.split(" ")[1];
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        userId = decoded.customer_id;
+      }
+    } catch (error) {
+      console.error("Token decode error:", error);
+    }
+
+    // Kullanıcı klasörü oluştur
+    const userDir = userId ? `user-${userId}` : "anonymous";
+    const uploadDir = path.join(__dirname, "../uploads/chat-media", userDir);
+
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const originalName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_"); // Güvenli dosya adı
+    cb(null, file.fieldname + "-" + uniqueSuffix + "-" + originalName);
+  },
+});
+
+const fileFilter = (req, file, cb) => {
+  // Resim ve video dosyalarına izin ver
+  if (
+    file.mimetype.startsWith("image/") ||
+    file.mimetype.startsWith("video/")
+  ) {
+    cb(null, true);
+  } else {
+    cb(new Error("Sadece resim ve video dosyaları yüklenebilir!"), false);
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit (video için daha büyük)
+  },
+});
 
 // @route   GET /api/chat/rooms
 // @desc    Get user's chat rooms
@@ -312,6 +367,7 @@ router.get("/messages/:roomId", async (req, res) => {
         u.last_name,
         u.email,
         u.company,
+        u.role,
         reply.message_content as reply_content,
         reply_sender.first_name as reply_sender_first_name,
         reply_sender.last_name as reply_sender_last_name
@@ -326,11 +382,33 @@ router.get("/messages/:roomId", async (req, res) => {
       [roomId, parseInt(limit), parseInt(offset)]
     );
 
+    // Modify display names for chat admin users
+    const messagesWithDisplayNames = result.rows.map((row) => {
+      let displayName = `${row.first_name} ${row.last_name}`;
+      const allowedRoles = ["advertiser", "editor", "admin", "super_admin"];
+
+      if (allowedRoles.includes(row.role)) {
+        // Map role to Turkish display name
+        const roleDisplayNames = {
+          advertiser: "Reklamcı",
+          editor: "Editör",
+          admin: "Admin",
+          super_admin: "Süper Admin",
+        };
+        displayName = roleDisplayNames[row.role] || row.role;
+      }
+
+      return {
+        ...row,
+        display_name: displayName,
+      };
+    });
+
     res.json({
       status: "success",
       data: {
-        messages: result.rows.reverse(), // Reverse to get chronological order
-        total: result.rows.length,
+        messages: messagesWithDisplayNames.reverse(), // Reverse to get chronological order
+        total: messagesWithDisplayNames.length,
       },
     });
   } catch (error) {
@@ -338,6 +416,545 @@ router.get("/messages/:roomId", async (req, res) => {
     res.status(500).json({
       status: "error",
       message: "Mesajlar alınırken bir hata oluştu",
+    });
+  }
+});
+
+// @route   POST /api/chat/messages/image
+// @desc    Send an image message to a chat room
+// @access  Private
+router.post("/messages/image", upload.single("image"), async (req, res) => {
+  try {
+    const { room_id, message_content = "" } = req.body;
+
+    // Authentication logic
+    let user = null;
+    let isChatAdmin = false;
+
+    try {
+      const authHeader = req.headers["authorization"];
+      const token = authHeader && authHeader.split(" ")[1];
+
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const result = await query(
+          "SELECT customer_id, first_name, last_name, email, company, phone, role, is_active FROM users WHERE customer_id = $1",
+          [decoded.customer_id]
+        );
+
+        if (result.rows.length > 0 && result.rows[0].is_active) {
+          user = result.rows[0];
+          const allowedRoles = ["advertiser", "editor", "admin", "super_admin"];
+          isChatAdmin = allowedRoles.includes(user.role);
+        }
+      }
+    } catch (error) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    const customerId = user.customer_id;
+
+    if (!room_id || !req.file) {
+      return res.status(400).json({
+        status: "error",
+        message: "Oda ID ve resim dosyası gereklidir",
+      });
+    }
+
+    // Access control: Normal users can only send messages to their own room (roomId = customerId)
+    if (!isChatAdmin && parseInt(room_id) !== customerId) {
+      return res.status(403).json({
+        status: "error",
+        message:
+          "Access denied - you can only send messages to your own chat room",
+      });
+    }
+
+    // Resim dosyası bilgilerini al
+    const fileUrl = `/uploads/chat-images/${req.file.filename}`;
+    const fileName = req.file.originalname;
+    const fileSize = req.file.size;
+    const fileType = req.file.mimetype;
+
+    // Insert image message
+    const result = await query(
+      `
+      INSERT INTO chat_messages (room_id, sender_id, message_type, message_content, file_url, file_name, file_size, file_type)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+    `,
+      [
+        room_id,
+        customerId,
+        "image",
+        message_content,
+        fileUrl,
+        fileName,
+        fileSize,
+        fileType,
+      ]
+    );
+
+    // Get message with sender info
+    const messageWithSender = await query(
+      `
+      SELECT 
+        cm.id,
+        cm.room_id,
+        cm.sender_id,
+        cm.message_type,
+        cm.message_content,
+        cm.file_url,
+        cm.file_name,
+        cm.file_size,
+        cm.file_type,
+        cm.is_edited,
+        cm.is_deleted,
+        cm.reply_to_message_id,
+        cm.created_at,
+        cm.updated_at,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.company,
+        u.role
+      FROM chat_messages cm
+      INNER JOIN users u ON cm.sender_id = u.customer_id
+      WHERE cm.id = $1
+    `,
+      [result.rows[0].id]
+    );
+
+    // Modify display name for chat admin users
+    let displayName = `${messageWithSender.rows[0].first_name} ${messageWithSender.rows[0].last_name}`;
+    const allowedRoles = ["advertiser", "editor", "admin", "super_admin"];
+
+    if (allowedRoles.includes(messageWithSender.rows[0].role)) {
+      // Map role to Turkish display name
+      const roleDisplayNames = {
+        advertiser: "Reklamcı",
+        editor: "Editör",
+        admin: "Admin",
+        super_admin: "Süper Admin",
+      };
+      displayName =
+        roleDisplayNames[messageWithSender.rows[0].role] ||
+        messageWithSender.rows[0].role;
+    }
+
+    // Add display_name to the response
+    const messageData = {
+      ...messageWithSender.rows[0],
+      display_name: displayName,
+    };
+
+    // Update room's updated_at timestamp
+    await query(
+      `
+      UPDATE chat_rooms 
+      SET updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+    `,
+      [room_id]
+    );
+
+    res.json({
+      status: "success",
+      message: "Resim mesajı başarıyla gönderildi",
+      data: {
+        message: messageData,
+      },
+    });
+  } catch (error) {
+    console.error("Send image message error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Resim mesajı gönderilirken bir hata oluştu",
+    });
+  }
+});
+
+// @route   POST /api/chat/messages/media
+// @desc    Send a media message (image/video) to a chat room
+// @access  Private
+router.post("/messages/media", upload.single("media"), async (req, res) => {
+  try {
+    const { room_id, message_content = "" } = req.body;
+
+    // Authentication logic
+    let user = null;
+    let isChatAdmin = false;
+
+    try {
+      const authHeader = req.headers["authorization"];
+      const token = authHeader && authHeader.split(" ")[1];
+
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const result = await query(
+          "SELECT customer_id, first_name, last_name, email, company, phone, role, is_active FROM users WHERE customer_id = $1",
+          [decoded.customer_id]
+        );
+
+        if (result.rows.length > 0 && result.rows[0].is_active) {
+          user = result.rows[0];
+          const allowedRoles = ["advertiser", "editor", "admin", "super_admin"];
+          isChatAdmin = allowedRoles.includes(user.role);
+        }
+      }
+    } catch (error) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    const customerId = user.customer_id;
+
+    if (!room_id || !req.file) {
+      return res.status(400).json({
+        status: "error",
+        message: "Oda ID ve medya dosyası gereklidir",
+      });
+    }
+
+    // Access control: Normal users can only send messages to their own room (roomId = customerId)
+    if (!isChatAdmin && parseInt(room_id) !== customerId) {
+      return res.status(403).json({
+        status: "error",
+        message:
+          "Access denied - you can only send messages to your own chat room",
+      });
+    }
+
+    // Dosya türünü belirle
+    const isVideo = req.file.mimetype.startsWith("video/");
+    const messageType = isVideo ? "video" : "image";
+
+    // Medya dosyası bilgilerini al
+    const userDir = `user-${customerId}`;
+    const fileUrl = `/uploads/chat-media/${userDir}/${req.file.filename}`;
+    const fileName = req.file.originalname;
+    const fileSize = req.file.size;
+    const fileType = req.file.mimetype;
+
+    // Insert media message
+    const result = await query(
+      `
+      INSERT INTO chat_messages (room_id, sender_id, message_type, message_content, file_url, file_name, file_size, file_type)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING *
+    `,
+      [
+        room_id,
+        customerId,
+        messageType,
+        message_content,
+        fileUrl,
+        fileName,
+        fileSize,
+        fileType,
+      ]
+    );
+
+    // Get message with sender info
+    const messageWithSender = await query(
+      `
+      SELECT 
+        cm.id,
+        cm.room_id,
+        cm.sender_id,
+        cm.message_type,
+        cm.message_content,
+        cm.file_url,
+        cm.file_name,
+        cm.file_size,
+        cm.file_type,
+        cm.is_edited,
+        cm.is_deleted,
+        cm.reply_to_message_id,
+        cm.created_at,
+        cm.updated_at,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.company,
+        u.role
+      FROM chat_messages cm
+      INNER JOIN users u ON cm.sender_id = u.customer_id
+      WHERE cm.id = $1
+    `,
+      [result.rows[0].id]
+    );
+
+    // Modify display name for chat admin users
+    let displayName = `${messageWithSender.rows[0].first_name} ${messageWithSender.rows[0].last_name}`;
+    const allowedRoles = ["advertiser", "editor", "admin", "super_admin"];
+
+    if (allowedRoles.includes(messageWithSender.rows[0].role)) {
+      // Map role to Turkish display name
+      const roleDisplayNames = {
+        advertiser: "Reklamcı",
+        editor: "Editör",
+        admin: "Admin",
+        super_admin: "Süper Admin",
+      };
+      displayName =
+        roleDisplayNames[messageWithSender.rows[0].role] ||
+        messageWithSender.rows[0].role;
+    }
+
+    // Add display_name to the response
+    const messageData = {
+      ...messageWithSender.rows[0],
+      display_name: displayName,
+    };
+
+    // Update room's updated_at timestamp
+    await query(
+      `
+      UPDATE chat_rooms 
+      SET updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+    `,
+      [room_id]
+    );
+
+    res.json({
+      status: "success",
+      message: `${isVideo ? "Video" : "Resim"} mesajı başarıyla gönderildi`,
+      data: {
+        message: messageData,
+      },
+    });
+  } catch (error) {
+    console.error("Send media message error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Medya mesajı gönderilirken bir hata oluştu",
+    });
+  }
+});
+
+// @route   GET /api/chat/media/user/:userId
+// @desc    Get user's media files
+// @access  Private (Admin only)
+router.get("/media/user/:userId", authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const currentUser = req.user;
+
+    // Sadece admin kullanıcılar veya kendi medyalarını görebilir
+    const allowedRoles = ["admin", "super_admin"];
+    if (
+      !allowedRoles.includes(currentUser.role) &&
+      currentUser.customer_id !== parseInt(userId)
+    ) {
+      return res.status(403).json({
+        status: "error",
+        message: "Bu işlem için yetkiniz yok",
+      });
+    }
+
+    // Kullanıcının medya dosyalarını getir
+    const result = await query(
+      `
+      SELECT 
+        cm.id,
+        cm.message_type,
+        cm.file_url,
+        cm.file_name,
+        cm.file_size,
+        cm.file_type,
+        cm.message_content,
+        cm.created_at,
+        cr.room_name,
+        u.first_name,
+        u.last_name,
+        u.email
+      FROM chat_messages cm
+      INNER JOIN chat_rooms cr ON cm.room_id = cr.id
+      INNER JOIN users u ON cm.sender_id = u.customer_id
+      WHERE cm.sender_id = $1 
+        AND cm.message_type IN ('image', 'video')
+        AND cm.is_deleted = false
+      ORDER BY cm.created_at DESC
+    `,
+      [userId]
+    );
+
+    // Medya dosyalarını kategorize et
+    const mediaFiles = {
+      images: [],
+      videos: [],
+      total: result.rows.length,
+      totalSize: 0,
+    };
+
+    result.rows.forEach((file) => {
+      const mediaItem = {
+        id: file.id,
+        fileName: file.file_name,
+        fileUrl: file.file_url,
+        fileSize: file.file_size,
+        fileType: file.file_type,
+        messageContent: file.message_content,
+        roomName: file.room_name,
+        createdAt: file.created_at,
+        senderName: `${file.first_name} ${file.last_name}`,
+        senderEmail: file.email,
+      };
+
+      if (file.message_type === "image") {
+        mediaFiles.images.push(mediaItem);
+      } else if (file.message_type === "video") {
+        mediaFiles.videos.push(mediaItem);
+      }
+
+      mediaFiles.totalSize += file.file_size || 0;
+    });
+
+    res.json({
+      status: "success",
+      data: {
+        userId: parseInt(userId),
+        mediaFiles,
+        summary: {
+          totalFiles: mediaFiles.total,
+          totalImages: mediaFiles.images.length,
+          totalVideos: mediaFiles.videos.length,
+          totalSizeMB:
+            Math.round((mediaFiles.totalSize / (1024 * 1024)) * 100) / 100,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get user media error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Kullanıcı medya dosyaları alınırken bir hata oluştu",
+    });
+  }
+});
+
+// @route   GET /api/chat/media/all
+// @desc    Get all media files (Admin only)
+// @access  Private
+router.get("/media/all", authenticateToken, async (req, res) => {
+  try {
+    const currentUser = req.user;
+
+    // Sadece admin kullanıcılar
+    const allowedRoles = ["admin", "super_admin"];
+    if (!allowedRoles.includes(currentUser.role)) {
+      return res.status(403).json({
+        status: "error",
+        message: "Bu işlem için yetkiniz yok",
+      });
+    }
+
+    // Tüm medya dosyalarını getir
+    const result = await query(
+      `
+      SELECT 
+        cm.id,
+        cm.sender_id,
+        cm.message_type,
+        cm.file_url,
+        cm.file_name,
+        cm.file_size,
+        cm.file_type,
+        cm.message_content,
+        cm.created_at,
+        cr.room_name,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.customer_id
+      FROM chat_messages cm
+      INNER JOIN chat_rooms cr ON cm.room_id = cr.id
+      INNER JOIN users u ON cm.sender_id = u.customer_id
+      WHERE cm.message_type IN ('image', 'video')
+        AND cm.is_deleted = false
+      ORDER BY cm.created_at DESC
+    `
+    );
+
+    // Kullanıcılara göre grupla
+    const userMediaMap = {};
+    let totalSize = 0;
+
+    result.rows.forEach((file) => {
+      const userId = file.sender_id;
+      if (!userMediaMap[userId]) {
+        userMediaMap[userId] = {
+          userId: userId,
+          userName: `${file.first_name} ${file.last_name}`,
+          userEmail: file.email,
+          mediaFiles: {
+            images: [],
+            videos: [],
+          },
+          totalFiles: 0,
+          totalSize: 0,
+        };
+      }
+
+      const mediaItem = {
+        id: file.id,
+        fileName: file.file_name,
+        fileUrl: file.file_url,
+        fileSize: file.file_size,
+        fileType: file.file_type,
+        messageContent: file.message_content,
+        roomName: file.room_name,
+        createdAt: file.created_at,
+      };
+
+      if (file.message_type === "image") {
+        userMediaMap[userId].mediaFiles.images.push(mediaItem);
+      } else if (file.message_type === "video") {
+        userMediaMap[userId].mediaFiles.videos.push(mediaItem);
+      }
+
+      userMediaMap[userId].totalFiles++;
+      userMediaMap[userId].totalSize += file.file_size || 0;
+      totalSize += file.file_size || 0;
+    });
+
+    res.json({
+      status: "success",
+      data: {
+        users: Object.values(userMediaMap),
+        summary: {
+          totalUsers: Object.keys(userMediaMap).length,
+          totalFiles: result.rows.length,
+          totalSizeMB: Math.round((totalSize / (1024 * 1024)) * 100) / 100,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get all media error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Tüm medya dosyaları alınırken bir hata oluştu",
     });
   }
 });
@@ -353,7 +970,43 @@ router.post("/messages", async (req, res) => {
       message_type = "text",
       reply_to_message_id,
     } = req.body;
-    const customerId = req.user.customer_id;
+
+    // Authentication logic
+    let user = null;
+    let isChatAdmin = false;
+
+    try {
+      const authHeader = req.headers["authorization"];
+      const token = authHeader && authHeader.split(" ")[1];
+
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const result = await query(
+          "SELECT customer_id, first_name, last_name, email, company, phone, role, is_active FROM users WHERE customer_id = $1",
+          [decoded.customer_id]
+        );
+
+        if (result.rows.length > 0 && result.rows[0].is_active) {
+          user = result.rows[0];
+          const allowedRoles = ["advertiser", "editor", "admin", "super_admin"];
+          isChatAdmin = allowedRoles.includes(user.role);
+        }
+      }
+    } catch (error) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    const customerId = user.customer_id;
 
     if (!room_id || !message_content) {
       return res.status(400).json({
@@ -362,8 +1015,14 @@ router.post("/messages", async (req, res) => {
       });
     }
 
-    // Chat admin kullanıcıları herhangi bir odada mesaj gönderebilir
-    // Erişim kontrolü kaldırıldı
+    // Access control: Normal users can only send messages to their own room (roomId = customerId)
+    if (!isChatAdmin && parseInt(room_id) !== customerId) {
+      return res.status(403).json({
+        status: "error",
+        message:
+          "Access denied - you can only send messages to your own chat room",
+      });
+    }
 
     // Insert message
     const result = await query(
@@ -402,13 +1061,37 @@ router.post("/messages", async (req, res) => {
         u.first_name,
         u.last_name,
         u.email,
-        u.company
+        u.company,
+        u.role
       FROM chat_messages cm
       INNER JOIN users u ON cm.sender_id = u.customer_id
       WHERE cm.id = $1
     `,
       [result.rows[0].id]
     );
+
+    // Modify display name for chat admin users
+    let displayName = `${messageWithSender.rows[0].first_name} ${messageWithSender.rows[0].last_name}`;
+    const allowedRoles = ["advertiser", "editor", "admin", "super_admin"];
+
+    if (allowedRoles.includes(messageWithSender.rows[0].role)) {
+      // Map role to Turkish display name
+      const roleDisplayNames = {
+        advertiser: "Reklamcı",
+        editor: "Editör",
+        admin: "Admin",
+        super_admin: "Süper Admin",
+      };
+      displayName =
+        roleDisplayNames[messageWithSender.rows[0].role] ||
+        messageWithSender.rows[0].role;
+    }
+
+    // Add display_name to the response
+    const messageData = {
+      ...messageWithSender.rows[0],
+      display_name: displayName,
+    };
 
     // Update room's updated_at timestamp
     await query(
@@ -424,7 +1107,7 @@ router.post("/messages", async (req, res) => {
       status: "success",
       message: "Mesaj başarıyla gönderildi",
       data: {
-        message: messageWithSender.rows[0],
+        message: messageData,
       },
     });
   } catch (error) {

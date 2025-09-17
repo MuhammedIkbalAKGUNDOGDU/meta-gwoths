@@ -31,6 +31,10 @@ const ChatPage = () => {
   const [userRole, setUserRole] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
+  const [selectedMedia, setSelectedMedia] = useState(null);
+  const [mediaPreview, setMediaPreview] = useState(null);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [mediaType, setMediaType] = useState(null); // 'image' or 'video'
 
   useEffect(() => {
     setIsVisible(true);
@@ -377,6 +381,105 @@ const ChatPage = () => {
     }
   };
 
+  const handleMediaSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Dosya boyutu kontrolü (50MB)
+      if (file.size > 50 * 1024 * 1024) {
+        setError("Dosya 50MB'dan büyük olamaz");
+        return;
+      }
+
+      // Dosya tipi kontrolü
+      if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
+        setError("Sadece resim ve video dosyaları yüklenebilir");
+        return;
+      }
+
+      setSelectedMedia(file);
+      setMediaType(file.type.startsWith("video/") ? "video" : "image");
+
+      // Önizleme oluştur
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setMediaPreview(e.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSendMedia = async () => {
+    if (!selectedMedia || !currentRoom) return;
+
+    try {
+      setIsUploadingMedia(true);
+      setError(null);
+
+      // Chat admin kullanıcısı için özel headers
+      let headers;
+      if (isChatAdminAuthenticated()) {
+        const chatAdminToken = getChatAdminToken();
+        headers = getChatAdminHeaders(chatAdminToken);
+      } else {
+        headers = getAuthHeaders(token);
+      }
+
+      // FormData oluştur
+      const formData = new FormData();
+      formData.append("media", selectedMedia);
+      formData.append("room_id", currentRoom.id);
+      formData.append("message_content", newMessage.trim() || "");
+
+      // Authorization header'ını ayrı olarak ekle (FormData ile çakışmaması için)
+      const response = await fetch(getApiUrl(API_ENDPOINTS.chatMediaMessage), {
+        method: "POST",
+        headers: {
+          Authorization: headers.Authorization,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Medya gönderilemedi");
+      }
+
+      const data = await response.json();
+
+      // Add message to local state
+      setMessages((prev) => [...prev, data.data.message]);
+      setNewMessage("");
+      setSelectedMedia(null);
+      setMediaPreview(null);
+      setMediaType(null);
+
+      // Emit typing stop
+      if (socketRef.current) {
+        socketRef.current.emit("stop_typing", { roomId: currentRoom.id });
+      }
+
+      // Socket ile mesajı broadcast et
+      if (socketRef.current) {
+        socketRef.current.emit("send_message", {
+          roomId: currentRoom.id,
+          messageContent: data.data.message.message_content || "",
+          messageType: mediaType,
+          replyToMessageId: null,
+        });
+      }
+    } catch (err) {
+      console.error("Send media error:", err);
+      setError("Medya gönderilirken bir hata oluştu");
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  };
+
+  const handleRemoveMedia = () => {
+    setSelectedMedia(null);
+    setMediaPreview(null);
+    setMediaType(null);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
@@ -607,7 +710,8 @@ const ChatPage = () => {
                           <span className="text-xs font-medium opacity-75">
                             {isOwnMessage
                               ? "Sen"
-                              : `${message.first_name} ${message.last_name}`}
+                              : message.display_name ||
+                                `${message.first_name} ${message.last_name}`}
                           </span>
                           <span className="text-xs opacity-60">
                             {new Date(message.created_at).toLocaleTimeString(
@@ -619,7 +723,61 @@ const ChatPage = () => {
                             )}
                           </span>
                         </div>
-                        <p className="text-sm">{message.message_content}</p>
+
+                        {/* Medya mesajı (Resim/Video) */}
+                        {message.message_type === "image" &&
+                          message.file_url && (
+                            <div className="mb-2">
+                              <img
+                                src={`${getApiUrl("").replace("/api", "")}${
+                                  message.file_url
+                                }`}
+                                alt={message.file_name || "Resim"}
+                                className="max-w-xs rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow duration-200"
+                                onClick={() =>
+                                  window.open(
+                                    `${getApiUrl("").replace("/api", "")}${
+                                      message.file_url
+                                    }`,
+                                    "_blank"
+                                  )
+                                }
+                              />
+                              {message.file_name && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {message.file_name}
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                        {/* Video mesajı */}
+                        {message.message_type === "video" &&
+                          message.file_url && (
+                            <div className="mb-2">
+                              <video
+                                src={`${getApiUrl("").replace("/api", "")}${
+                                  message.file_url
+                                }`}
+                                controls
+                                className="max-w-xs rounded-lg shadow-sm"
+                                preload="metadata"
+                                crossOrigin="anonymous"
+                              >
+                                Tarayıcınız video oynatmayı desteklemiyor.
+                              </video>
+                              {message.file_name && (
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {message.file_name}
+                                </p>
+                              )}
+                            </div>
+                          )}
+
+                        {/* Metin mesajı */}
+                        {message.message_content && (
+                          <p className="text-sm">{message.message_content}</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -631,7 +789,85 @@ const ChatPage = () => {
 
           {/* Message Input */}
           <div className="bg-white/90 backdrop-blur-sm border-t border-slate-200 p-6">
-            <div className="flex items-end space-x-4">
+            {/* Medya Önizleme */}
+            {mediaPreview && (
+              <div className="mb-4 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-slate-700">
+                    {mediaType === "video" ? "Video" : "Resim"} Önizleme
+                  </span>
+                  <button
+                    onClick={handleRemoveMedia}
+                    className="text-red-500 hover:text-red-700 transition-colors duration-200"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                {mediaType === "video" ? (
+                  <video
+                    src={mediaPreview}
+                    controls
+                    className="max-w-xs rounded-lg shadow-sm"
+                    preload="metadata"
+                    crossOrigin="anonymous"
+                  >
+                    Tarayıcınız video oynatmayı desteklemiyor.
+                  </video>
+                ) : (
+                  <img
+                    src={mediaPreview}
+                    alt="Önizleme"
+                    className="max-w-xs rounded-lg shadow-sm"
+                    crossOrigin="anonymous"
+                  />
+                )}
+              </div>
+            )}
+
+            <div className="flex items-end space-x-3">
+              {/* Medya Seçme Butonu */}
+              <div className="relative">
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  onChange={handleMediaSelect}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  id="media-upload"
+                />
+                <label
+                  htmlFor="media-upload"
+                  className="p-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:shadow-lg transform hover:scale-105 transition-all duration-200 cursor-pointer flex items-center justify-center"
+                  title="Resim/Video Gönder"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                </label>
+              </div>
+
+              {/* Mesaj Input */}
               <div className="flex-1">
                 <textarea
                   value={newMessage}
@@ -646,24 +882,33 @@ const ChatPage = () => {
                   style={{ minHeight: "60px", maxHeight: "120px" }}
                 />
               </div>
+
+              {/* Gönder Butonu */}
               <button
-                onClick={handleSendMessage}
-                disabled={!newMessage.trim()}
-                className="p-4 bg-gradient-to-r from-blue-600 to-slate-700 text-white rounded-2xl hover:shadow-lg transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                onClick={selectedMedia ? handleSendMedia : handleSendMessage}
+                disabled={
+                  (!newMessage.trim() && !selectedMedia) || isUploadingMedia
+                }
+                className="p-3 bg-gradient-to-r from-blue-600 to-slate-700 text-white rounded-xl hover:shadow-lg transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
+                title="Gönder"
               >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                  />
-                </svg>
+                {isUploadingMedia ? (
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                ) : (
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                    />
+                  </svg>
+                )}
               </button>
             </div>
           </div>
