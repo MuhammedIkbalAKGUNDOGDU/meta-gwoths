@@ -4,6 +4,7 @@ import Header from "../components/Header";
 import Footer from "../components/Footer";
 import InfoModal from "../components/InfoModal";
 import { getApiUrl, getDefaultHeaders, API_ENDPOINTS } from "../config/api";
+import { isAuthenticated, getUserInfo } from "../utils/auth";
 
 const LoginPage = () => {
   const navigate = useNavigate();
@@ -24,7 +25,67 @@ const LoginPage = () => {
 
   useEffect(() => {
     setIsVisible(true);
+
+    // Otomatik giriş kontrolü
+    checkAutoLogin();
   }, []);
+
+  // Otomatik giriş fonksiyonu
+  const checkAutoLogin = async () => {
+    try {
+      // localStorage'da token var mı kontrol et
+      if (isAuthenticated()) {
+        const userInfo = getUserInfo();
+
+        if (userInfo) {
+          console.log("🔄 Otomatik giriş yapılıyor...", userInfo);
+
+          // Token'ın geçerliliğini kontrol et (opsiyonel)
+          const response = await fetch(getApiUrl(API_ENDPOINTS.profile), {
+            method: "GET",
+            headers: {
+              ...getDefaultHeaders(),
+              Authorization: `Bearer ${localStorage.getItem(
+                "metagrowths_token"
+              )}`,
+            },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+
+            if (data.status === "success") {
+              console.log("✅ Otomatik giriş başarılı!", data.data);
+
+              // Anket durumuna göre yönlendirme
+              const surveyCompleted = data.data.survey_completed;
+
+              if (surveyCompleted) {
+                // Anket tamamlanmış, paket seçim sayfasına yönlendir
+                navigate("/reklam-paket-secim");
+              } else {
+                // Anket tamamlanmamış, anket sayfasına yönlendir
+                navigate("/anket");
+              }
+            } else {
+              // Token geçersiz, localStorage'ı temizle
+              localStorage.clear();
+              sessionStorage.clear();
+            }
+          } else {
+            // Token geçersiz, localStorage'ı temizle
+            localStorage.clear();
+            sessionStorage.clear();
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Otomatik giriş hatası:", error);
+      // Hata durumunda localStorage'ı temizle
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

@@ -41,8 +41,13 @@ export const getChatAdminHeaders = (token) => {
 };
 
 export const chatAdminLogout = () => {
-  localStorage.removeItem("chatAdminToken");
-  localStorage.removeItem("chatAdminUser");
+  // localStorage'daki tüm değerleri temizle
+  localStorage.clear();
+
+  // Alternatif olarak sessionStorage'ı da temizleyebiliriz
+  sessionStorage.clear();
+
+  // Chat admin login sayfasına yönlendir
   window.location.href = "/chat-admin-login";
 };
 

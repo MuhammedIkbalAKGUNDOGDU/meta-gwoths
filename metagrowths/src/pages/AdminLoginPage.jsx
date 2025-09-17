@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { isAuthenticated } from "../utils/auth";
+import { isAdminAuthenticated, getAdminInfo } from "../utils/adminAuth";
 
 const AdminLoginPage = () => {
   const navigate = useNavigate();
@@ -14,11 +15,40 @@ const AdminLoginPage = () => {
 
   useEffect(() => {
     setIsVisible(true);
-    // Eğer zaten admin girişi yapılmışsa admin paneline yönlendir
-    if (localStorage.getItem("admin_token")) {
-      navigate("/admin");
-    }
+
+    // Otomatik admin giriş kontrolü
+    checkAutoAdminLogin();
   }, [navigate]);
+
+  // Otomatik admin giriş fonksiyonu
+  const checkAutoAdminLogin = () => {
+    try {
+      // localStorage'da admin token var mı kontrol et
+      if (isAdminAuthenticated()) {
+        const adminInfo = getAdminInfo();
+
+        if (adminInfo) {
+          console.log("🔄 Admin otomatik giriş yapılıyor...", adminInfo);
+
+          // Role'a göre yönlendirme
+          let redirectPath = "/admin";
+          if (adminInfo.role === "forms_admin") {
+            redirectPath = "/admin/forms";
+          } else if (adminInfo.role === "super_admin") {
+            redirectPath = "/admin/super";
+          }
+
+          console.log("✅ Admin otomatik giriş başarılı!", adminInfo);
+          navigate(redirectPath);
+        }
+      }
+    } catch (error) {
+      console.error("Admin otomatik giriş hatası:", error);
+      // Hata durumunda localStorage'ı temizle
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

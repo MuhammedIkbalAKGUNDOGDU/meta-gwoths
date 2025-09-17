@@ -1,8 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import { getApiUrl } from "../config/api";
+import {
+  isChatAdminAuthenticated,
+  getChatAdminUser,
+} from "../utils/chatAdminAuth";
 
 const ChatAdminLoginPage = () => {
   const navigate = useNavigate();
@@ -12,6 +16,58 @@ const ChatAdminLoginPage = () => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    // Otomatik giriş kontrolü
+    checkAutoLogin();
+  }, []);
+
+  // Otomatik giriş fonksiyonu
+  const checkAutoLogin = async () => {
+    try {
+      // localStorage'da chat admin token var mı kontrol et
+      if (isChatAdminAuthenticated()) {
+        const userInfo = getChatAdminUser();
+
+        if (userInfo) {
+          console.log("🔄 Chat Admin otomatik giriş yapılıyor...", userInfo);
+
+          // Token'ın geçerliliğini kontrol et
+          const response = await fetch(getApiUrl("/auth/chat-admin-profile"), {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${localStorage.getItem("chatAdminToken")}`,
+            },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+
+            if (data.status === "success") {
+              console.log("✅ Chat Admin otomatik giriş başarılı!", data.data);
+
+              // Chat admin sayfasına yönlendir
+              navigate("/chat-admin");
+            } else {
+              // Token geçersiz, localStorage'ı temizle
+              localStorage.clear();
+              sessionStorage.clear();
+            }
+          } else {
+            // Token geçersiz, localStorage'ı temizle
+            localStorage.clear();
+            sessionStorage.clear();
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Chat Admin otomatik giriş hatası:", error);
+      // Hata durumunda localStorage'ı temizle
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+  };
 
   const handleChange = (e) => {
     setFormData({

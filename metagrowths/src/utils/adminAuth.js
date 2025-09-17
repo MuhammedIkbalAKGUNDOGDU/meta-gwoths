@@ -20,10 +20,15 @@ export const getAdminInfo = () => {
   }
 };
 
-// Admin çıkış yap
+// Admin çıkış yap - localStorage'daki tüm değerleri temizle
 export const adminLogout = () => {
-  localStorage.removeItem("admin_token");
-  localStorage.removeItem("admin_user");
+  // localStorage'daki tüm değerleri temizle
+  localStorage.clear();
+
+  // Alternatif olarak sessionStorage'ı da temizleyebiliriz
+  sessionStorage.clear();
+
+  // Admin login sayfasına yönlendir
   window.location.href = "/adminlogin";
 };
 

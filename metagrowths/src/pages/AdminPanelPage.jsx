@@ -145,12 +145,6 @@ const AdminPanelPage = () => {
                 Chat Yönetimi
               </button>
               <button
-                onClick={() => navigate("/admin/media")}
-                className="bg-gradient-to-r from-purple-600 to-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
-              >
-                Medya Yönetimi
-              </button>
-              <button
                 onClick={adminLogout}
                 className="bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
               >

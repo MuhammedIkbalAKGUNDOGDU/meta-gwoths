@@ -17,7 +17,6 @@ import SuperAdminPage from "./pages/SuperAdminPage";
 import TokenManagementPage from "./pages/TokenManagementPage";
 import ChatAdminPage from "./pages/ChatAdminPage";
 import ChatAdminLoginPage from "./pages/ChatAdminLoginPage";
-import UserMediaManagementPage from "./pages/UserMediaManagementPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
 import ChatAdminProtectedRoute from "./components/ChatAdminProtectedRoute";
@@ -98,14 +97,6 @@ const AppRouter = () => {
         element={
           <AdminProtectedRoute>
             <TokenManagementPage />
-          </AdminProtectedRoute>
-        }
-      />
-      <Route
-        path="/admin/media"
-        element={
-          <AdminProtectedRoute>
-            <UserMediaManagementPage />
           </AdminProtectedRoute>
         }
       />

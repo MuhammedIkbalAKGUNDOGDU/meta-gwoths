@@ -25,10 +25,15 @@ export const getUserInfo = () => {
   }
 };
 
-// Çıkış yap
+// Çıkış yap - localStorage'daki tüm değerleri temizle
 export const logout = () => {
-  localStorage.removeItem("metagrowths_token");
-  localStorage.removeItem("user_info");
+  // localStorage'daki tüm değerleri temizle
+  localStorage.clear();
+
+  // Alternatif olarak sessionStorage'ı da temizleyebiliriz
+  sessionStorage.clear();
+
+  // Ana sayfaya yönlendir
   window.location.href = "/";
 };
 

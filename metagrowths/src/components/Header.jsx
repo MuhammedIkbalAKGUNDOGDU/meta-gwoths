@@ -59,7 +59,7 @@ const Header = () => {
               <Link to="/iletisim" className={getLinkClasses("/iletisim")}>
                 İletişim
               </Link>
-              {isLoggedIn ? (
+              {isLoggedIn && location.pathname !== "/" ? (
                 <>
                   <Link
                     to="/dashboard"
@@ -138,12 +138,21 @@ const Header = () => {
             <Link to="/iletisim" className={getLinkClasses("/iletisim", true)}>
               İletişim
             </Link>
-            <a
-              href="/login"
-              className="bg-gradient-to-r from-blue-600 to-slate-700 text-white block px-3 py-2 rounded-md text-base font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
-            >
-              Giriş Yap
-            </a>
+            {isLoggedIn && location.pathname !== "/" ? (
+              <button
+                onClick={logout}
+                className="bg-gradient-to-r from-red-600 to-red-700 text-white block px-3 py-2 rounded-md text-base font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300 w-full text-left"
+              >
+                Çıkış Yap
+              </button>
+            ) : (
+              <a
+                href="/login"
+                className="bg-gradient-to-r from-blue-600 to-slate-700 text-white block px-3 py-2 rounded-md text-base font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
+              >
+                Giriş Yap
+              </a>
+            )}
           </div>
         </div>
       )}

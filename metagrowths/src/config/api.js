@@ -38,8 +38,6 @@ export const API_ENDPOINTS = {
   chatRoomDetails: "/chat/rooms",
   chatMessages: "/chat/messages",
   chatMediaMessage: "/chat/messages/media",
-  chatUserMedia: "/chat/media/user",
-  chatAllMedia: "/chat/media/all",
   joinChatRoom: "/chat/rooms",
   leaveChatRoom: "/chat/rooms",
   removeParticipant: "/chat/rooms",
