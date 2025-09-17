@@ -47,6 +47,16 @@ const ChatAdminLoginPage = () => {
             if (data.status === "success") {
               console.log("✅ Chat Admin otomatik giriş başarılı!", data.data);
 
+              // Normal kullanıcı formatında da kaydet (tutarlılık için)
+              localStorage.setItem(
+                "metagrowths_token",
+                localStorage.getItem("chatAdminToken")
+              );
+              localStorage.setItem(
+                "metagrowths_user",
+                localStorage.getItem("chatAdminUser")
+              );
+
               // Chat admin sayfasına yönlendir
               navigate("/chat-admin");
             } else {
@@ -93,9 +103,34 @@ const ChatAdminLoginPage = () => {
       const data = await response.json();
 
       if (response.ok) {
-        // Token'ı localStorage'a kaydet
+        // Token'ı localStorage'a kaydet (hem chat admin hem normal format)
         localStorage.setItem("chatAdminToken", data.token);
         localStorage.setItem("chatAdminUser", JSON.stringify(data.user));
+
+        // Normal kullanıcı formatında da kaydet (tutarlılık için)
+        localStorage.setItem("metagrowths_token", data.token);
+        localStorage.setItem("metagrowths_user", JSON.stringify(data.user));
+
+        console.log("✅ Chat Admin girişi başarılı:", {
+          token: data.token ? `${data.token.substring(0, 20)}...` : "null",
+          user: data.user,
+          localStorage_chatAdminToken: localStorage.getItem("chatAdminToken")
+            ? "kaydedildi"
+            : "kaydedilmedi",
+          localStorage_chatAdminUser: localStorage.getItem("chatAdminUser")
+            ? "kaydedildi"
+            : "kaydedilmedi",
+          localStorage_metagrowths_token: localStorage.getItem(
+            "metagrowths_token"
+          )
+            ? "kaydedildi"
+            : "kaydedilmedi",
+          localStorage_metagrowths_user: localStorage.getItem(
+            "metagrowths_user"
+          )
+            ? "kaydedildi"
+            : "kaydedilmedi",
+        });
 
         // Chat admin sayfasına yönlendir
         navigate("/chat-admin");

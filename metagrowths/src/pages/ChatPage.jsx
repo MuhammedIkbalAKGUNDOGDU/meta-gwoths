@@ -17,6 +17,14 @@ const ChatPage = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
   const { token, user } = useAuth();
+
+  // Chat admin için token ve user bilgilerini al
+  const chatAdminToken = getChatAdminToken();
+  const chatAdminUser = getChatAdminUser();
+
+  // Aktif token ve user'ı belirle
+  const activeToken = isChatAdminAuthenticated() ? chatAdminToken : token;
+  const activeUser = isChatAdminAuthenticated() ? chatAdminUser : user;
   const socketRef = useRef();
   const messagesEndRef = useRef(null);
 
@@ -39,10 +47,10 @@ const ChatPage = () => {
   useEffect(() => {
     setIsVisible(true);
     checkUserAccess();
-    if (token) {
+    if (activeToken) {
       initializeChat();
     }
-  }, [userId, token]);
+  }, [userId, token, chatAdminToken]);
 
   useEffect(() => {
     scrollToBottom();
@@ -57,32 +65,52 @@ const ChatPage = () => {
   }, []);
 
   const checkUserAccess = () => {
+    console.log("🔍 ChatPage checkUserAccess başladı:", {
+      userId,
+      isChatAdminAuthenticated: isChatAdminAuthenticated(),
+      chatAdminToken: localStorage.getItem("chatAdminToken") ? "var" : "yok",
+      chatAdminUser: localStorage.getItem("chatAdminUser") ? "var" : "yok",
+      metagrowthsToken: localStorage.getItem("metagrowths_token")
+        ? "var"
+        : "yok",
+      metagrowthsUser: localStorage.getItem("metagrowths_user") ? "var" : "yok",
+      normalToken: localStorage.getItem("token") ? "var" : "yok",
+      normalUser: localStorage.getItem("user") ? "var" : "yok",
+    });
+
     // Chat admin kullanıcısı kontrolü
     if (isChatAdminAuthenticated()) {
       const chatAdminUser = getChatAdminUser();
-      console.log("✅ Chat Admin erişimi:", {
-        room_id: userId,
-        current_user: `${chatAdminUser.first_name} ${chatAdminUser.last_name}`,
-        customer_id: chatAdminUser.customer_id,
-        role: chatAdminUser.role,
-      });
-      return;
+      if (chatAdminUser) {
+        console.log("✅ Chat Admin erişimi:", {
+          room_id: userId,
+          current_user: `${chatAdminUser.first_name} ${chatAdminUser.last_name}`,
+          customer_id: chatAdminUser.customer_id,
+          role: chatAdminUser.role,
+        });
+        return;
+      } else {
+        console.log("❌ Chat Admin user bilgisi bulunamadı");
+        navigate("/chat-admin-login");
+        return;
+      }
     }
 
     // Normal kullanıcı kontrolü
-    if (!user) {
+    if (!activeUser) {
+      console.log("❌ Normal kullanıcı girişi gerekli");
       navigate("/login");
       return;
     }
 
-    const currentUserId = user.customer_id.toString();
+    const currentUserId = activeUser.customer_id.toString();
 
     // Eğer userId bir sayı ise (oda ID'si), bu chat yönetimi sayfasından geliyor
     if (userId && !isNaN(userId)) {
       console.log("✅ Chat odası erişimi:", {
         room_id: userId,
-        current_user: `${user.first_name} ${user.last_name}`,
-        customer_id: user.customer_id,
+        current_user: `${activeUser.first_name} ${activeUser.last_name}`,
+        customer_id: activeUser.customer_id,
       });
       return;
     }
@@ -92,7 +120,7 @@ const ChatPage = () => {
       console.log("🚫 Yetkisiz erişim:", {
         requested_user_id: userId,
         current_user_id: currentUserId,
-        user: `${user.first_name} ${user.last_name}`,
+        user: `${activeUser.first_name} ${activeUser.last_name}`,
       });
       navigate("/dashboard");
       return;
@@ -100,8 +128,8 @@ const ChatPage = () => {
 
     console.log("✅ Chat sayfası erişimi onaylandı:", {
       user_id: userId,
-      current_user: `${user.first_name} ${user.last_name}`,
-      customer_id: user.customer_id,
+      current_user: `${activeUser.first_name} ${activeUser.last_name}`,
+      customer_id: activeUser.customer_id,
     });
   };
 
@@ -125,7 +153,7 @@ const ChatPage = () => {
       }
 
       // Normal kullanıcı kontrolü
-      if (token) {
+      if (activeToken) {
         // Eğer userId bir sayı ise (oda ID'si), direkt o odaya bağlan
         if (userId && !isNaN(userId)) {
           const roomId = parseInt(userId);
@@ -137,7 +165,7 @@ const ChatPage = () => {
 
       // Get user's chat rooms
       const roomsResponse = await fetch(getApiUrl(API_ENDPOINTS.chatRooms), {
-        headers: getAuthHeaders(token),
+        headers: getAuthHeaders(activeToken),
       });
 
       if (!roomsResponse.ok) {
@@ -185,10 +213,10 @@ const ChatPage = () => {
           headers: headers,
         });
       } else {
-        headers = getAuthHeaders(token);
+        headers = getAuthHeaders(activeToken);
         console.log("🔍 Normal User Debug:", {
-          token: token ? `${token.substring(0, 20)}...` : "null",
-          user: user,
+          token: activeToken ? `${activeToken.substring(0, 20)}...` : "null",
+          user: activeUser,
         });
       }
 
@@ -247,13 +275,8 @@ const ChatPage = () => {
   };
 
   const initializeSocket = (roomId) => {
-    // Chat admin kullanıcısı için özel token
-    let authToken;
-    if (isChatAdminAuthenticated()) {
-      authToken = getChatAdminToken();
-    } else {
-      authToken = token;
-    }
+    // Aktif token'ı kullan
+    const authToken = activeToken;
 
     // Initialize socket connection
     socketRef.current = io("http://localhost:5000", {
@@ -311,17 +334,16 @@ const ChatPage = () => {
     if (!newMessage.trim() || !currentRoom) return;
 
     try {
-      // Chat admin kullanıcısı için özel headers
+      // Aktif token için headers
       let headers;
       if (isChatAdminAuthenticated()) {
-        const chatAdminToken = getChatAdminToken();
         headers = {
-          ...getChatAdminHeaders(chatAdminToken),
+          ...getChatAdminHeaders(activeToken),
           "Content-Type": "application/json",
         };
       } else {
         headers = {
-          ...getAuthHeaders(token),
+          ...getAuthHeaders(activeToken),
           "Content-Type": "application/json",
         };
       }
@@ -415,13 +437,12 @@ const ChatPage = () => {
       setIsUploadingMedia(true);
       setError(null);
 
-      // Chat admin kullanıcısı için özel headers
+      // Aktif token için headers
       let headers;
       if (isChatAdminAuthenticated()) {
-        const chatAdminToken = getChatAdminToken();
-        headers = getChatAdminHeaders(chatAdminToken);
+        headers = getChatAdminHeaders(activeToken);
       } else {
-        headers = getAuthHeaders(token);
+        headers = getAuthHeaders(activeToken);
       }
 
       // FormData oluştur
@@ -679,10 +700,8 @@ const ChatPage = () => {
           <div className="flex-1 p-6 overflow-y-auto">
             <div className="space-y-4">
               {messages.map((message) => {
-                // Chat admin kullanıcısı için özel kontrol
-                const currentUser = isChatAdminAuthenticated()
-                  ? getChatAdminUser()
-                  : user;
+                // Aktif kullanıcı kontrolü
+                const currentUser = activeUser;
                 const isOwnMessage =
                   message.sender_id === currentUser?.customer_id;
 
