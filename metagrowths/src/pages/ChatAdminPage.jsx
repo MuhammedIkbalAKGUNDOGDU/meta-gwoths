@@ -19,6 +19,13 @@ const ChatAdminPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Filtreleme state'leri
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all"); // all, active, inactive
+  const [filterType, setFilterType] = useState("all"); // all, customer, support
+  const [sortBy, setSortBy] = useState("updated_at"); // updated_at, created_at, room_name, participant_count
+  const [sortOrder, setSortOrder] = useState("desc"); // asc, desc
+
   useEffect(() => {
     if (!isChatAdminAuthenticated()) {
       navigate("/chat-admin-login");
@@ -50,6 +57,64 @@ const ChatAdminPage = () => {
       setIsLoading(false);
     }
   };
+
+  // Filtrelenmiş ve sıralanmış chat odaları
+  const filteredAndSortedRooms = chatRooms
+    .filter((room) => {
+      // Arama filtresi
+      const matchesSearch =
+        room.room_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        room.room_description
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        room.creator_first_name
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        room.creator_last_name
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        room.creator_email.toLowerCase().includes(searchTerm.toLowerCase());
+
+      // Durum filtresi
+      const matchesStatus =
+        filterStatus === "all" ||
+        (filterStatus === "active" && room.is_active) ||
+        (filterStatus === "inactive" && !room.is_active);
+
+      // Tip filtresi
+      const matchesType = filterType === "all" || room.room_type === filterType;
+
+      return matchesSearch && matchesStatus && matchesType;
+    })
+    .sort((a, b) => {
+      let aValue, bValue;
+
+      switch (sortBy) {
+        case "room_name":
+          aValue = a.room_name.toLowerCase();
+          bValue = b.room_name.toLowerCase();
+          break;
+        case "created_at":
+          aValue = new Date(a.created_at);
+          bValue = new Date(b.created_at);
+          break;
+        case "participant_count":
+          aValue = parseInt(a.participant_count);
+          bValue = parseInt(b.participant_count);
+          break;
+        case "updated_at":
+        default:
+          aValue = new Date(a.updated_at);
+          bValue = new Date(b.updated_at);
+          break;
+      }
+
+      if (sortOrder === "asc") {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
 
   const viewRoomDetails = async (roomId) => {
     try {
@@ -215,7 +280,7 @@ const ChatAdminPage = () => {
         <div className="bg-white rounded-3xl shadow-2xl p-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold text-slate-800">
-              Chat Odaları ({chatRooms.length})
+              Chat Odaları ({filteredAndSortedRooms.length}/{chatRooms.length})
             </h2>
             <button
               onClick={fetchChatRooms}
@@ -223,6 +288,101 @@ const ChatAdminPage = () => {
             >
               Yenile
             </button>
+          </div>
+
+          {/* Filtreleme ve Arama */}
+          <div className="bg-gray-50 rounded-2xl p-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              {/* Arama */}
+              <div className="lg:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Arama
+                </label>
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Oda adı, açıklama veya kullanıcı ara..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Durum Filtresi */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Durum
+                </label>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Tümü</option>
+                  <option value="active">Aktif</option>
+                  <option value="inactive">Pasif</option>
+                </select>
+              </div>
+
+              {/* Tip Filtresi */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tip
+                </label>
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Tümü</option>
+                  <option value="customer">Müşteri</option>
+                  <option value="support">Destek</option>
+                </select>
+              </div>
+
+              {/* Sıralama */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Sırala
+                </label>
+                <div className="flex space-x-2">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="flex-1 px-2 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  >
+                    <option value="updated_at">Son Güncelleme</option>
+                    <option value="created_at">Oluşturma</option>
+                    <option value="room_name">Oda Adı</option>
+                    <option value="participant_count">Katılımcı</option>
+                  </select>
+                  <button
+                    onClick={() =>
+                      setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+                    }
+                    className="px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
+                    title={sortOrder === "asc" ? "Azalan" : "Artan"}
+                  >
+                    {sortOrder === "asc" ? "↑" : "↓"}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Filtreleri Temizle */}
+            {(searchTerm || filterStatus !== "all" || filterType !== "all") && (
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => {
+                    setSearchTerm("");
+                    setFilterStatus("all");
+                    setFilterType("all");
+                  }}
+                  className="text-sm text-gray-600 hover:text-gray-800 underline"
+                >
+                  Filtreleri Temizle
+                </button>
+              </div>
+            )}
           </div>
 
           {chatRooms.length === 0 ? (
@@ -244,12 +404,43 @@ const ChatAdminPage = () => {
               </div>
               <p className="text-slate-600">Henüz chat odası bulunmuyor</p>
             </div>
+          ) : filteredAndSortedRooms.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg
+                  className="w-8 h-8 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+              </div>
+              <p className="text-gray-600">
+                Filtrelere uygun chat odası bulunamadı
+              </p>
+              <button
+                onClick={() => {
+                  setSearchTerm("");
+                  setFilterStatus("all");
+                  setFilterType("all");
+                }}
+                className="mt-2 text-blue-600 hover:text-blue-800 underline"
+              >
+                Filtreleri Temizle
+              </button>
+            </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Chat Odaları Listesi */}
               <div className="lg:col-span-2">
                 <div className="space-y-4">
-                  {chatRooms.map((room) => (
+                  {filteredAndSortedRooms.map((room) => (
                     <div
                       key={room.id}
                       className="border border-slate-200 rounded-xl p-6 hover:shadow-lg transition-shadow"
