@@ -28,14 +28,45 @@ const authenticateAdmin = (req, res, next) => {
       super_admin_token_789: { role: "super_admin", username: "super_admin" },
     };
 
+    // Önce hardcoded token'ları kontrol et
     if (adminTokens[token]) {
       req.admin = adminTokens[token];
       next();
     } else {
-      return res.status(401).json({
-        status: "error",
-        message: "Geçersiz admin token",
-      });
+      // JWT token kontrolü (chat admin için)
+      try {
+        console.log("🔍 JWT Token Debug:", {
+          token: token.substring(0, 20) + "...",
+          jwtSecret: process.env.JWT_SECRET ? "var" : "yok",
+        });
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        console.log("🔍 JWT Decoded:", decoded);
+
+        // Chat admin rolleri kontrolü
+        const allowedRoles = ["advertiser", "editor", "admin", "super_admin"];
+        if (allowedRoles.includes(decoded.role)) {
+          req.admin = {
+            role: decoded.role,
+            username: decoded.email,
+            customer_id: decoded.customer_id,
+          };
+          console.log("🔍 Admin set:", req.admin);
+          next();
+        } else {
+          console.log("🔍 Role not allowed:", decoded.role);
+          return res.status(401).json({
+            status: "error",
+            message: "Bu rol chat yönetimine erişemez",
+          });
+        }
+      } catch (jwtError) {
+        console.log("🔍 JWT Error:", jwtError.message);
+        return res.status(401).json({
+          status: "error",
+          message: "Geçersiz admin token",
+        });
+      }
     }
   } catch (error) {
     console.error("Admin auth error:", error);

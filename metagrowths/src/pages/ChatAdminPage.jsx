@@ -288,6 +288,31 @@ const ChatAdminPage = () => {
                           >
                             Chat'e Gir
                           </button>
+                          <button
+                            onClick={() => {
+                              console.log("🔍 Room object:", room);
+                              console.log("🔍 Room ID:", room.id);
+                              console.log("🔍 Room name:", room.room_name);
+
+                              const roomId = room.id;
+                              console.log(
+                                "🔍 Opening room media page for room ID:",
+                                roomId
+                              );
+
+                              if (roomId) {
+                                window.open(
+                                  `/chat-admin/room-media/${roomId}`,
+                                  "_blank"
+                                );
+                              } else {
+                                alert("Oda ID bulunamadı!");
+                              }
+                            }}
+                            className="px-4 py-2 text-sm bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
+                          >
+                            Media Öğeleri
+                          </button>
                         </div>
                       </div>
                       <div className="flex gap-2">

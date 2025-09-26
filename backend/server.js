@@ -18,12 +18,21 @@ const { initializeSocket } = require("./socket");
 const app = express();
 
 // Middleware
-app.use(helmet());
+// app.use(helmet()); // CORS ile çakışabilir, devre dışı bırakıldı
 app.use(morgan("combined"));
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN,
+    origin: "*", // Tüm origin'lere izin ver
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: [
+      "Origin",
+      "X-Requested-With",
+      "Content-Type",
+      "Accept",
+      "Authorization",
+    ],
+    exposedHeaders: ["Content-Length", "X-Foo", "X-Bar"],
   })
 );
 app.use(express.json({ limit: "10mb" }));
@@ -33,10 +42,8 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(
   "/uploads",
   (req, res, next) => {
-    res.header(
-      "Access-Control-Allow-Origin",
-      process.env.CORS_ORIGIN || "http://localhost:5173"
-    );
+    // CORS headers
+    res.header("Access-Control-Allow-Origin", "*");
     res.header(
       "Access-Control-Allow-Methods",
       "GET, POST, PUT, DELETE, OPTIONS"
@@ -46,9 +53,32 @@ app.use(
       "Origin, X-Requested-With, Content-Type, Accept, Authorization"
     );
     res.header("Access-Control-Allow-Credentials", "true");
+
+    // Content-Type headers for different file types
+    if (req.path.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+      res.header("Content-Type", "image/jpeg");
+    } else if (req.path.match(/\.(mp4|webm|ogg)$/i)) {
+      res.header("Content-Type", "video/mp4");
+    }
+
+    // Cache headers
+    res.header("Cache-Control", "public, max-age=31536000");
+
+    // Handle preflight requests
+    if (req.method === "OPTIONS") {
+      res.status(200).end();
+      return;
+    }
+
     next();
   },
-  express.static("uploads")
+  express.static("uploads", {
+    setHeaders: (res, path) => {
+      // Additional headers for static files
+      res.header("Cross-Origin-Resource-Policy", "cross-origin");
+      res.header("Cross-Origin-Embedder-Policy", "unsafe-none");
+    },
+  })
 );
 
 // Routes

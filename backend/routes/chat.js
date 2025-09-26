@@ -39,7 +39,11 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const originalName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, "_"); // Güvenli dosya adı
+    // Türkçe karakterleri koruyarak güvenli dosya adı oluştur
+    const originalName = file.originalname
+      .normalize("NFC") // Unicode normalization
+      .replace(/[<>:"/\\|?*]/g, "_") // Sadece tehlikeli karakterleri değiştir
+      .replace(/\s+/g, "_"); // Boşlukları underscore ile değiştir
     cb(null, file.fieldname + "-" + uniqueSuffix + "-" + originalName);
   },
 });
@@ -133,14 +137,13 @@ router.get(
         cr.max_participants,
         cr.created_at,
         cr.updated_at,
+        cr.created_by as creator_id,
         creator.first_name as creator_first_name,
         creator.last_name as creator_last_name,
         creator.email as creator_email,
-        COUNT(cp.user_id) as participant_count
+        (SELECT COUNT(*) FROM chat_participants WHERE room_id = cr.id) as participant_count
       FROM chat_rooms cr
       LEFT JOIN users creator ON cr.created_by = creator.customer_id
-      LEFT JOIN chat_participants cp ON cr.id = cp.room_id
-      GROUP BY cr.id, creator.first_name, creator.last_name, creator.email
       ORDER BY cr.updated_at DESC
     `);
 
@@ -651,7 +654,11 @@ router.post("/messages/media", upload.single("media"), async (req, res) => {
     // Medya dosyası bilgilerini al
     const userDir = `user-${customerId}`;
     const fileUrl = `/uploads/chat-media/${userDir}/${req.file.filename}`;
-    const fileName = req.file.originalname;
+    // Türkçe karakterleri koruyarak dosya adını normalize et
+    const fileName = req.file.originalname
+      .normalize("NFC") // Unicode normalization
+      .replace(/[<>:"/\\|?*]/g, "_") // Sadece tehlikeli karakterleri değiştir
+      .replace(/\s+/g, "_"); // Boşlukları underscore ile değiştir
     const fileSize = req.file.size;
     const fileType = req.file.mimetype;
 
@@ -1294,5 +1301,391 @@ router.post(
     }
   }
 );
+
+// Proxy endpoint for media files (bypasses CORS)
+router.get(
+  "/media/proxy/:filename",
+  authenticateChatAdmin,
+  async (req, res) => {
+    try {
+      const { filename } = req.params;
+      const filePath = path.join(__dirname, "../uploads/chat-media", filename);
+
+      // Check if file exists
+      if (!fs.existsSync(filePath)) {
+        return res.status(404).json({
+          status: "error",
+          message: "Dosya bulunamadı",
+        });
+      }
+
+      // Set appropriate headers
+      const ext = path.extname(filename).toLowerCase();
+      if ([".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext)) {
+        res.setHeader("Content-Type", "image/jpeg");
+      } else if ([".mp4", ".webm", ".ogg"].includes(ext)) {
+        res.setHeader("Content-Type", "video/mp4");
+      }
+
+      res.setHeader("Cache-Control", "public, max-age=31536000");
+
+      // Stream the file
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.pipe(res);
+    } catch (error) {
+      console.error("Media proxy error:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Dosya yüklenirken hata oluştu",
+      });
+    }
+  }
+);
+
+// Get room media files (all users in a room)
+router.get("/media/room/:roomId", authenticateChatAdmin, async (req, res) => {
+  try {
+    console.log("🔍 Chat Room Media API Debug:", {
+      roomId: req.params.roomId,
+      user: req.user,
+      headers: req.headers.authorization ? "var" : "yok",
+      query: req.query,
+    });
+
+    const { roomId } = req.params;
+    const { page = 1, limit = 20 } = req.query;
+
+    if (!roomId || isNaN(roomId)) {
+      return res.status(400).json({
+        status: "error",
+        message: "Geçersiz oda ID'si",
+      });
+    }
+
+    // Check if room exists
+    const roomQuery =
+      "SELECT id, room_name, room_description FROM chat_rooms WHERE id = $1";
+    const roomResult = await query(roomQuery, [roomId]);
+
+    if (roomResult.rows.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Chat odası bulunamadı",
+      });
+    }
+
+    const room = roomResult.rows[0];
+
+    // Get all users who have sent messages in this room
+    const usersQuery = `
+      SELECT DISTINCT 
+        u.customer_id as id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        COUNT(cm.id) as message_count,
+        MAX(cm.created_at) as last_message_at
+      FROM users u
+      INNER JOIN chat_messages cm ON u.customer_id = cm.sender_id
+      WHERE cm.room_id = $1
+      GROUP BY u.customer_id, u.first_name, u.last_name, u.email
+      ORDER BY last_message_at DESC
+    `;
+    const usersResult = await query(usersQuery, [roomId]);
+    console.log("🔍 Debug - Room users:", usersResult.rows);
+
+    // Get all media messages from this room
+    const offset = (page - 1) * limit;
+    const mediaQuery = `
+      SELECT
+        cm.id,
+        cm.file_name,
+        cm.file_url,
+        cm.file_size,
+        cm.file_type,
+        cm.message_type,
+        cm.created_at,
+        cm.room_id,
+        cm.sender_id,
+        u.first_name,
+        u.last_name,
+        u.email
+      FROM chat_messages cm
+      INNER JOIN users u ON cm.sender_id = u.customer_id
+      WHERE cm.room_id = $1
+        AND (cm.message_type IN ('image', 'video') OR cm.file_url IS NOT NULL)
+        AND cm.file_url IS NOT NULL
+        AND cm.file_url != ''
+      ORDER BY cm.created_at DESC
+      LIMIT $2 OFFSET $3
+    `;
+
+    const mediaResult = await query(mediaQuery, [roomId, limit, offset]);
+    console.log("🔍 Debug - Room media messages:", mediaResult.rows);
+
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM chat_messages
+      WHERE room_id = $1
+        AND (message_type IN ('image', 'video') OR file_url IS NOT NULL)
+        AND file_url IS NOT NULL
+        AND file_url != ''
+    `;
+    const countResult = await query(countQuery, [roomId]);
+    const total = parseInt(countResult.rows[0].total);
+
+    const media = mediaResult.rows.map((row) => {
+      const fullUrl = `${req.protocol}://${req.get("host")}${row.file_url}`;
+
+      return {
+        id: row.id,
+        file_name: row.file_name,
+        file_url: row.file_url,
+        file_size: row.file_size,
+        file_type: row.file_type,
+        message_type: row.message_type,
+        created_at: row.created_at,
+        room_id: row.room_id,
+        sender_id: row.sender_id,
+        sender_name: `${row.first_name} ${row.last_name}`,
+        sender_email: row.email,
+        full_url: fullUrl,
+      };
+    });
+
+    res.json({
+      status: "success",
+      data: {
+        room: {
+          id: room.id,
+          room_name: room.room_name,
+          room_description: room.room_description,
+        },
+        users: usersResult.rows.map((user) => ({
+          id: user.id,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          email: user.email,
+          full_name: `${user.first_name} ${user.last_name}`,
+          message_count: parseInt(user.message_count),
+          last_message_at: user.last_message_at,
+        })),
+        media,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total_pages: Math.ceil(total / limit),
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get room media error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Oda medya dosyaları alınırken bir hata oluştu",
+    });
+  }
+});
+
+// Get user media files
+router.get("/media/user/:userId", authenticateChatAdmin, async (req, res) => {
+  try {
+    console.log("🔍 Chat Media API Debug:", {
+      userId: req.params.userId,
+      user: req.user,
+      headers: req.headers.authorization ? "var" : "yok",
+      query: req.query,
+    });
+
+    const { userId } = req.params;
+    const { page = 1, limit = 20 } = req.query;
+
+    // Validate userId
+    if (!userId || isNaN(userId)) {
+      return res.status(400).json({
+        status: "error",
+        message: "Geçersiz kullanıcı ID'si",
+      });
+    }
+
+    // Get user info
+    const userQuery =
+      "SELECT customer_id as id, first_name, last_name, email FROM users WHERE customer_id = $1";
+    const userResult = await query(userQuery, [userId]);
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Kullanıcı bulunamadı",
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Get media messages for this user
+    const offset = (page - 1) * limit;
+    const mediaQuery = `
+        SELECT 
+          id,
+          file_name,
+          file_url,
+          file_size,
+          file_type,
+          message_type,
+          created_at,
+          room_id
+        FROM chat_messages 
+        WHERE sender_id = $1 
+          AND (message_type IN ('image', 'video') OR file_url IS NOT NULL)
+          AND file_url IS NOT NULL
+          AND file_url != ''
+        ORDER BY created_at DESC
+        LIMIT $2 OFFSET $3
+      `;
+
+    // Debug: Önce tüm mesajları kontrol et
+    const debugQuery = `
+        SELECT id, sender_id, message_type, file_url, file_name, created_at
+        FROM chat_messages 
+        WHERE sender_id = $1
+        ORDER BY created_at DESC
+        LIMIT 10
+      `;
+    const debugResult = await query(debugQuery, [userId]);
+    console.log("🔍 Debug - Tüm mesajlar:", debugResult.rows);
+
+    // Debug: Tüm chat_messages tablosundaki sender_id'leri kontrol et
+    const allMessagesQuery = `
+        SELECT DISTINCT sender_id, COUNT(*) as message_count
+        FROM chat_messages 
+        GROUP BY sender_id
+        ORDER BY sender_id
+      `;
+    const allMessagesResult = await query(allMessagesQuery);
+    console.log("🔍 Debug - Tüm sender_id'ler:", allMessagesResult.rows);
+
+    // Debug: Tüm mesajları kontrol et (file_url olanlar)
+    const allMediaQuery = `
+        SELECT id, sender_id, message_type, file_url, file_name, created_at
+        FROM chat_messages 
+        WHERE file_url IS NOT NULL AND file_url != ''
+        ORDER BY created_at DESC
+        LIMIT 10
+      `;
+    const allMediaResult = await query(allMediaQuery);
+    console.log("🔍 Debug - Tüm medya mesajları:", allMediaResult.rows);
+
+    // Debug: Kullanıcı ID'si 1 için test
+    const testUser1Query = `
+        SELECT id, sender_id, message_type, file_url, file_name, created_at
+        FROM chat_messages 
+        WHERE sender_id = 1 AND file_url IS NOT NULL
+        ORDER BY created_at DESC
+        LIMIT 5
+      `;
+    const testUser1Result = await query(testUser1Query);
+    console.log("🔍 Debug - User ID 1 medya mesajları:", testUser1Result.rows);
+
+    // Debug: Kullanıcı ID'si 12 için test
+    const testUser12Query = `
+        SELECT id, sender_id, message_type, file_url, file_name, created_at
+        FROM chat_messages 
+        WHERE sender_id = 12 AND file_url IS NOT NULL
+        ORDER BY created_at DESC
+        LIMIT 5
+      `;
+    const testUser12Result = await query(testUser12Query);
+    console.log(
+      "🔍 Debug - User ID 12 medya mesajları:",
+      testUser12Result.rows
+    );
+
+    // Debug: Bu chat room'da hangi kullanıcılar mesaj atmış?
+    const roomMessagesQuery = `
+      SELECT DISTINCT sender_id, COUNT(*) as message_count, 
+             MAX(created_at) as last_message
+      FROM chat_messages
+      WHERE room_id = 1
+      GROUP BY sender_id
+      ORDER BY last_message DESC
+    `;
+    const roomMessagesResult = await query(roomMessagesQuery);
+    console.log(
+      "🔍 Debug - Chat Room 1'deki kullanıcılar:",
+      roomMessagesResult.rows
+    );
+
+    // Debug: Bu chat room'daki medya mesajları
+    const roomMediaQuery = `
+      SELECT id, sender_id, message_type, file_url, file_name, created_at
+      FROM chat_messages
+      WHERE room_id = 1 AND file_url IS NOT NULL AND file_url != ''
+      ORDER BY created_at DESC
+      LIMIT 10
+    `;
+    const roomMediaResult = await query(roomMediaQuery);
+    console.log(
+      "🔍 Debug - Chat Room 1 medya mesajları:",
+      roomMediaResult.rows
+    );
+
+    const mediaResult = await query(mediaQuery, [userId, limit, offset]);
+    console.log("🔍 Debug - Media sorgusu sonucu:", mediaResult.rows);
+
+    // Get total count
+    const countQuery = `
+        SELECT COUNT(*) as total
+        FROM chat_messages 
+        WHERE sender_id = $1 
+          AND message_type IN ('image', 'video')
+          AND file_url IS NOT NULL
+      `;
+    const countResult = await query(countQuery, [userId]);
+    console.log("🔍 Debug - Toplam sayı:", countResult.rows[0]);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Format media data
+    const media = mediaResult.rows.map((row) => ({
+      id: row.id,
+      file_name: row.file_name,
+      file_url: row.file_url,
+      file_size: row.file_size,
+      file_type: row.file_type,
+      message_type: row.message_type,
+      created_at: row.created_at,
+      room_id: row.room_id,
+      // Add full URL for frontend
+      full_url: `${req.protocol}://${req.get("host")}${row.file_url}`,
+    }));
+
+    res.json({
+      status: "success",
+      data: {
+        user: {
+          id: user.id,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          email: user.email,
+          full_name: `${user.first_name} ${user.last_name}`,
+        },
+        media,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total_pages: Math.ceil(total / limit),
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get user media error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Medya dosyaları alınırken bir hata oluştu",
+    });
+  }
+});
 
 module.exports = router;
