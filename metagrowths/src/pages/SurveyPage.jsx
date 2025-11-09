@@ -397,6 +397,14 @@ const SurveyPage = () => {
           redirectPath: "/reklam-paket-secim",
         });
         setShowInfoModal(true);
+        
+        // Modal gösterildikten 2 saniye sonra otomatik yönlendirme yap
+        // Yönlendirme yapılana kadar buton disabled kalacak
+        setTimeout(() => {
+          setShowInfoModal(false);
+          navigate("/reklam-paket-secim");
+        }, 2000);
+        // Başarılı durumda isSubmitting false yapılmıyor, yönlendirme yapılana kadar disabled kalacak
       } else {
         const errorData = await response.json();
         throw new Error(
@@ -406,8 +414,7 @@ const SurveyPage = () => {
     } catch (error) {
       console.error("Survey submission error:", error);
       alert(error.message || "Anket gönderilirken bir hata oluştu");
-    } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false); // Hata durumunda butonu tekrar aktif et
     }
   };
 
@@ -659,7 +666,7 @@ const SurveyPage = () => {
                     <span>Gönderiliyor...</span>
                   </div>
                 ) : (
-                  "Demam Et"
+                  "Devam Et"
                 )}
               </button>
             </div>
