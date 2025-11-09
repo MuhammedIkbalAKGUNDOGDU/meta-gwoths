@@ -117,45 +117,63 @@ const Header = () => {
         </div>
       </div>
 
-      {isMenuOpen && (
-        <div className="md:hidden">
-          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white/90 backdrop-blur-md border-t border-slate-200">
-            <Link to="/" className={getLinkClasses("/", true)}>
-              Ana Sayfa
-            </Link>
-            <Link
-              to="/hizmetler"
-              className={getLinkClasses("/hizmetler", true)}
+      <div
+        className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out ${
+          isMenuOpen
+            ? "max-h-96 opacity-100"
+            : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className={`px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white/90 backdrop-blur-md border-t border-slate-200 transform transition-all duration-300 ease-in-out ${
+          isMenuOpen
+            ? "translate-y-0"
+            : "-translate-y-full"
+        }`}>
+          <Link to="/" className={getLinkClasses("/", true)} onClick={() => setIsMenuOpen(false)}>
+            Ana Sayfa
+          </Link>
+          <Link
+            to="/hizmetler"
+            className={getLinkClasses("/hizmetler", true)}
+            onClick={() => setIsMenuOpen(false)}
+          >
+            Hizmetler
+          </Link>
+          <Link
+            to="/hakkimizda"
+            className={getLinkClasses("/hakkimizda", true)}
+            onClick={() => setIsMenuOpen(false)}
+          >
+            Hakkımızda
+          </Link>
+          <Link 
+            to="/iletisim" 
+            className={getLinkClasses("/iletisim", true)}
+            onClick={() => setIsMenuOpen(false)}
+          >
+            İletişim
+          </Link>
+          {isLoggedIn && location.pathname !== "/" ? (
+            <button
+              onClick={() => {
+                setIsMenuOpen(false);
+                logout();
+              }}
+              className="bg-gradient-to-r from-red-600 to-red-700 text-white block px-3 py-2 rounded-md text-base font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300 w-full text-left"
             >
-              Hizmetler
-            </Link>
-            <Link
-              to="/hakkimizda"
-              className={getLinkClasses("/hakkimizda", true)}
+              Çıkış Yap
+            </button>
+          ) : (
+            <a
+              href="/login"
+              className="bg-gradient-to-r from-blue-600 to-slate-700 text-white block px-3 py-2 rounded-md text-base font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
+              onClick={() => setIsMenuOpen(false)}
             >
-              Hakkımızda
-            </Link>
-            <Link to="/iletisim" className={getLinkClasses("/iletisim", true)}>
-              İletişim
-            </Link>
-            {isLoggedIn && location.pathname !== "/" ? (
-              <button
-                onClick={logout}
-                className="bg-gradient-to-r from-red-600 to-red-700 text-white block px-3 py-2 rounded-md text-base font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300 w-full text-left"
-              >
-                Çıkış Yap
-              </button>
-            ) : (
-              <a
-                href="/login"
-                className="bg-gradient-to-r from-blue-600 to-slate-700 text-white block px-3 py-2 rounded-md text-base font-medium hover:shadow-lg transform hover:scale-105 transition-all duration-300"
-              >
-                Giriş Yap
-              </a>
-            )}
-          </div>
+              Giriş Yap
+            </a>
+          )}
         </div>
-      )}
+      </div>
     </nav>
   );
 };
