@@ -472,9 +472,9 @@ const PackageSelectionPage = () => {
         </div>
 
         {/* Floating elements */}
-        <div className="absolute top-20 left-10 w-24 h-24 bg-blue-200/30 rounded-full animate-float"></div>
-        <div className="absolute bottom-20 right-10 w-32 h-32 bg-slate-200/40 rounded-full animate-float-delayed"></div>
-        <div className="absolute top-1/2 left-1/4 w-16 h-16 bg-blue-300/20 rounded-full animate-float-slow"></div>
+        <div className="absolute top-20 left-10 w-24 h-24 bg-blue-200/30 rounded-full animate-float pointer-events-none"></div>
+        <div className="absolute bottom-20 right-10 w-32 h-32 bg-slate-200/40 rounded-full animate-float-delayed pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/4 w-16 h-16 bg-blue-300/20 rounded-full animate-float-slow pointer-events-none"></div>
       </section>
 
       <Footer />

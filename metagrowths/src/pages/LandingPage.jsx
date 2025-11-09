@@ -223,15 +223,15 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center relative z-10">
             <div
-              className={`transition-all duration-1500 ease-out transform ${
+              className={`transition-all duration-1500 ease-out transform overflow-visible ${
                 isVisible
                   ? "translate-y-0 opacity-100"
                   : "translate-y-20 opacity-0"
               }`}
             >
-              <h1 className="text-5xl md:text-7xl font-bold text-slate-800 mb-8 tracking-tight">
+              <h1 className="text-5xl md:text-7xl font-bold text-slate-800 mb-8 tracking-tight overflow-visible">
                 Dijital Medya
-                <span className="block bg-gradient-to-r from-blue-600 to-slate-700 bg-clip-text text-transparent">
+                <span className="block bg-gradient-to-r from-blue-600 to-slate-700 bg-clip-text text-transparent overflow-visible pb-1 leading-tight">
                   Ajansınız
                 </span>
               </h1>
@@ -283,9 +283,9 @@ const LandingPage = () => {
         </div>
 
         {/* Floating elements */}
-        <div className="absolute top-20 left-10 w-24 h-24 bg-blue-200/30 rounded-full animate-float"></div>
-        <div className="absolute bottom-20 right-10 w-32 h-32 bg-slate-200/40 rounded-full animate-float-delayed"></div>
-        <div className="absolute top-1/2 left-1/4 w-16 h-16 bg-blue-300/20 rounded-full animate-float-slow"></div>
+        <div className="absolute top-20 left-10 w-24 h-24 bg-blue-200/30 rounded-full animate-float pointer-events-none"></div>
+        <div className="absolute bottom-20 right-10 w-32 h-32 bg-slate-200/40 rounded-full animate-float-delayed pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/4 w-16 h-16 bg-blue-300/20 rounded-full animate-float-slow pointer-events-none"></div>
       </section>
 
       {/* Trust Indicators */}
