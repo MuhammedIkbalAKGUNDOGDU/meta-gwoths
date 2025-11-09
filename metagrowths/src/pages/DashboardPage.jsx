@@ -6,7 +6,7 @@ import { getApiUrl, getAuthHeaders, API_ENDPOINTS } from "../config/api";
 
 const DashboardPage = () => {
   const navigate = useNavigate();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(280);
   const [isResizing, setIsResizing] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -423,6 +423,25 @@ const DashboardPage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
       <Header />
+      {/* Sidebar Toggle Button - Absolute positioned below header */}
+      <button
+        onClick={handleSidebarToggle}
+        className="fixed left-4 top-20 z-40 p-3 bg-white/90 backdrop-blur-sm border border-slate-200 rounded-xl text-slate-600 hover:text-slate-800 hover:bg-white transition-all duration-200 shadow-lg hover:shadow-xl"
+      >
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 6h16M4 12h16M4 18h16"
+          />
+        </svg>
+      </button>
       <div className="flex h-screen pt-16">
         {/* Sidebar */}
         <div
@@ -553,50 +572,6 @@ const DashboardPage = () => {
                 </div>
               )}
 
-              {/* Quick Actions */}
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-                <h3 className="text-sm font-semibold text-slate-800 mb-3">
-                  Hızlı İşlemler
-                </h3>
-                <div className="space-y-2">
-                  <button className="w-full text-left p-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors duration-200">
-                    Rapor Oluştur
-                  </button>
-                  <button className="w-full text-left p-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors duration-200">
-                    Ayarlar
-                  </button>
-                  <button className="w-full text-left p-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors duration-200">
-                    Yardım
-                  </button>
-                </div>
-              </div>
-
-              {/* Recent Activity */}
-              <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200">
-                <h3 className="text-sm font-semibold text-slate-800 mb-3">
-                  Son Aktiviteler
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <span className="text-xs text-slate-600">
-                      Çalışma Alanı 1 müsait
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                    <span className="text-xs text-slate-600">
-                      Çalışma Alanı 2 müsait
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
-                    <span className="text-xs text-slate-600">
-                      Çalışma Alanı 3 doldu
-                    </span>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -617,26 +592,6 @@ const DashboardPage = () => {
                 bulnumaktadır size özel olarak tanımlanacak herhangi bir fark
                 bulunmamaktadır lütfen boş bulunan odaya geçelim
               </p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={handleSidebarToggle}
-                className="p-3 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-xl text-slate-600 hover:text-slate-800 hover:bg-white transition-all duration-200 shadow-sm"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 6h16M4 12h16M4 18h16"
-                  />
-                </svg>
-              </button>
             </div>
           </div>
 
