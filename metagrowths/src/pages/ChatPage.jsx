@@ -538,12 +538,20 @@ const ChatPage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100">
       <Header />
-      <div className="flex h-screen pt-16">
+      <div className="flex h-screen pt-16 relative">
+        {/* Overlay for mobile */}
+        {isSidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            onClick={handleSidebarToggle}
+          />
+        )}
+        
         {/* Sidebar */}
         <div
           className={`bg-white/90 backdrop-blur-md border-r border-slate-200 transition-all duration-300 ease-in-out ${
-            isSidebarOpen ? "w-80" : "w-0"
-          } overflow-hidden`}
+            isSidebarOpen ? "w-full sm:w-80 md:w-80" : "w-0"
+          } overflow-hidden fixed md:relative inset-y-0 left-0 pt-16 md:pt-0 z-50 md:z-auto h-full shadow-xl md:shadow-none`}
         >
           <div className="p-6 h-full overflow-y-auto">
             {/* Sidebar Header */}
@@ -576,9 +584,9 @@ const ChatPage = () => {
               <h3 className="text-sm font-semibold text-slate-800 mb-3">
                 Katılımcılar ({participants.length}/4)
               </h3>
-              {participants.map((participant) => (
+              {participants.map((participant, index) => (
                 <div
-                  key={participant.user_id}
+                  key={participant.user_id || `participant-${index}-${participant.email}`}
                   className="flex items-center space-x-3 p-3 bg-white rounded-xl shadow-sm border border-slate-200"
                 >
                   <div className="relative">
@@ -699,7 +707,7 @@ const ChatPage = () => {
           {/* Messages Area */}
           <div className="flex-1 p-6 overflow-y-auto">
             <div className="space-y-4">
-              {messages.map((message) => {
+              {messages.map((message, index) => {
                 // Aktif kullanıcı kontrolü
                 const currentUser = activeUser;
                 const isOwnMessage =
@@ -707,7 +715,7 @@ const ChatPage = () => {
 
                 return (
                   <div
-                    key={message.id}
+                    key={message.id || `message-${index}-${message.created_at}`}
                     className={`flex ${
                       isOwnMessage ? "justify-end" : "justify-start"
                     }`}
