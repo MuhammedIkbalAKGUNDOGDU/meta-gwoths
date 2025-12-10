@@ -266,6 +266,20 @@ CREATE TABLE IF NOT EXISTS chat_permissions (
     UNIQUE(room_id, user_id)
 );
 
+-- Chat requests tablosu - Chat istekleri
+CREATE TABLE IF NOT EXISTS chat_requests (
+    id SERIAL PRIMARY KEY,
+    room_id INTEGER REFERENCES chat_rooms(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(customer_id) ON DELETE CASCADE,
+    description TEXT NOT NULL,
+    token_cost INTEGER DEFAULT 100 NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'cancelled')),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP,
+    completed_by INTEGER REFERENCES users(customer_id) ON DELETE SET NULL
+);
+
 -- Indexes for chat tables
 CREATE INDEX IF NOT EXISTS idx_chat_rooms_created_by ON chat_rooms(created_by);
 CREATE INDEX IF NOT EXISTS idx_chat_rooms_room_type ON chat_rooms(room_type);
@@ -279,6 +293,9 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created
 CREATE INDEX IF NOT EXISTS idx_chat_messages_message_type ON chat_messages(message_type);
 CREATE INDEX IF NOT EXISTS idx_chat_permissions_room_id ON chat_permissions(room_id);
 CREATE INDEX IF NOT EXISTS idx_chat_permissions_user_id ON chat_permissions(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_requests_room_id ON chat_requests(room_id);
+CREATE INDEX IF NOT EXISTS idx_chat_requests_user_id ON chat_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_requests_status ON chat_requests(status);
 
 -- Trigger oluştur - chat_rooms tablosu için
 DROP TRIGGER IF EXISTS update_chat_rooms_updated_at ON chat_rooms;
@@ -291,6 +308,13 @@ CREATE TRIGGER update_chat_rooms_updated_at
 DROP TRIGGER IF EXISTS update_chat_messages_updated_at ON chat_messages;
 CREATE TRIGGER update_chat_messages_updated_at
     BEFORE UPDATE ON chat_messages
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Trigger oluştur - chat_requests tablosu için
+DROP TRIGGER IF EXISTS update_chat_requests_updated_at ON chat_requests;
+CREATE TRIGGER update_chat_requests_updated_at
+    BEFORE UPDATE ON chat_requests
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 

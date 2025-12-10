@@ -43,6 +43,9 @@ const ChatPage = () => {
   const [mediaPreview, setMediaPreview] = useState(null);
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [mediaType, setMediaType] = useState(null); // 'image' or 'video'
+  const [requests, setRequests] = useState([]);
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestDescription, setRequestDescription] = useState("");
 
   useEffect(() => {
     setIsVisible(true);
@@ -238,9 +241,84 @@ const ChatPage = () => {
 
       // Load messages
       await loadMessages(roomId);
+      // Load requests
+      await loadRequests(roomId);
     } catch (err) {
       console.error("Load room details error:", err);
       setError("Oda detayları yüklenirken bir hata oluştu");
+    }
+  };
+
+  const loadRequests = async (roomId) => {
+    try {
+      let headers;
+      if (isChatAdminAuthenticated()) {
+        const chatAdminToken = getChatAdminToken();
+        headers = getChatAdminHeaders(chatAdminToken);
+      } else {
+        headers = getAuthHeaders(activeToken);
+      }
+
+      const response = await fetch(
+        getApiUrl(`${API_ENDPOINTS.chatRequests}/${roomId}`),
+        {
+          headers: headers,
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setRequests(data.data.requests || []);
+      }
+    } catch (err) {
+      console.error("Load requests error:", err);
+    }
+  };
+
+  const handleCreateRequest = async () => {
+    if (!requestDescription.trim() || !currentRoom) return;
+
+    try {
+      let headers;
+      if (isChatAdminAuthenticated()) {
+        headers = {
+          ...getChatAdminHeaders(activeToken),
+          "Content-Type": "application/json",
+        };
+      } else {
+        headers = {
+          ...getAuthHeaders(activeToken),
+          "Content-Type": "application/json",
+        };
+      }
+
+      const response = await fetch(getApiUrl(API_ENDPOINTS.chatRequests), {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({
+          room_id: currentRoom.id,
+          description: requestDescription.trim(),
+          token_cost: 100,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.status === "success") {
+        setRequests((prev) => [data.data.request, ...prev]);
+        setShowRequestModal(false);
+        setRequestDescription("");
+        // Refresh token info
+        if (window.location.reload) {
+          // Token bilgisini güncellemek için sayfayı yenile
+          setTimeout(() => window.location.reload(), 500);
+        }
+      } else {
+        setError(data.message || "İstek oluşturulurken bir hata oluştu");
+      }
+    } catch (err) {
+      console.error("Create request error:", err);
+      setError("İstek oluşturulurken bir hata oluştu");
     }
   };
 
@@ -589,15 +667,10 @@ const ChatPage = () => {
                   key={participant.user_id || `participant-${index}-${participant.email}`}
                   className="flex items-center space-x-3 p-3 bg-white rounded-xl shadow-sm border border-slate-200"
                 >
-                  <div className="relative">
+                  <div>
                     <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-lg">
                       {participant.first_name?.charAt(0) || "👤"}
                     </div>
-                    <div
-                      className={`absolute -bottom-1 -right-1 w-3 h-3 ${
-                        participant.is_online ? "bg-green-500" : "bg-gray-400"
-                      } rounded-full border-2 border-white`}
-                    ></div>
                   </div>
                   <div className="flex-1">
                     <h4 className="text-sm font-medium text-slate-800">
@@ -612,9 +685,6 @@ const ChatPage = () => {
                       </p>
                     )}
                   </div>
-                  <div className="text-xs text-green-600 font-medium">
-                    {participant.is_online ? "Çevrimiçi" : "Çevrimdışı"}
-                  </div>
                 </div>
               ))}
             </div>
@@ -627,6 +697,66 @@ const ChatPage = () => {
             {/* Token Transactions */}
             <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 mb-6">
               <TokenTransactions compact={true} limit={3} />
+            </div>
+
+            {/* Requests Section */}
+            <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-slate-800">
+                  İstekler ({requests.filter((r) => r.status !== "completed").length})
+                </h3>
+                <button
+                  onClick={() => setShowRequestModal(true)}
+                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  + İstek Oluştur
+                </button>
+              </div>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {requests.length === 0 ? (
+                  <p className="text-xs text-slate-500 text-center py-4">
+                    Henüz istek bulunmuyor
+                  </p>
+                ) : (
+                  requests.map((request) => (
+                    <div
+                      key={request.id}
+                      className={`p-3 rounded-lg border ${
+                        request.status === "completed"
+                          ? "bg-green-50 border-green-200"
+                          : request.status === "in_progress"
+                          ? "bg-yellow-50 border-yellow-200"
+                          : "bg-slate-50 border-slate-200"
+                      }`}
+                    >
+                      <p className="text-xs font-medium text-slate-800 mb-1">
+                        {request.description.substring(0, 50)}
+                        {request.description.length > 50 ? "..." : ""}
+                      </p>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-xs text-slate-600">
+                          {request.token_cost} token
+                        </span>
+                        <span
+                          className={`text-xs px-2 py-1 rounded ${
+                            request.status === "completed"
+                              ? "bg-green-100 text-green-800"
+                              : request.status === "in_progress"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-blue-100 text-blue-800"
+                          }`}
+                        >
+                          {request.status === "completed"
+                            ? "Tamamlandı"
+                            : request.status === "in_progress"
+                            ? "Yapılıyor"
+                            : "Beklemede"}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -941,6 +1071,78 @@ const ChatPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Request Modal */}
+      {showRequestModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-slate-800">
+                Yeni İstek Oluştur
+              </h3>
+              <button
+                onClick={() => {
+                  setShowRequestModal(false);
+                  setRequestDescription("");
+                  setRequestTokenCost(10);
+                }}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Açıklama
+                </label>
+                <textarea
+                  value={requestDescription}
+                  onChange={(e) => setRequestDescription(e.target.value)}
+                  placeholder="İstediğiniz şeyi açıklayın..."
+                  className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  rows="4"
+                />
+              </div>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  <span className="font-semibold">Token Maliyeti:</span> 100 token
+                </p>
+              </div>
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowRequestModal(false);
+                    setRequestDescription("");
+                  }}
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={handleCreateRequest}
+                  disabled={!requestDescription.trim()}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  Oluştur
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

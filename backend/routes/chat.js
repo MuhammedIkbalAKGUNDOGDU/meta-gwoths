@@ -1691,4 +1691,401 @@ router.get("/media/user/:userId", authenticateChatAdmin, async (req, res) => {
   }
 });
 
+// @route   POST /api/chat/requests
+// @desc    Create a chat request (uses tokens)
+// @access  Private
+router.post("/requests", async (req, res) => {
+  try {
+    const { room_id, description } = req.body;
+    const token_cost = 100; // Sabit token maliyeti
+
+    // Authentication logic
+    let user = null;
+    let isChatAdmin = false;
+
+    try {
+      const authHeader = req.headers["authorization"];
+      const token = authHeader && authHeader.split(" ")[1];
+
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const result = await query(
+          "SELECT customer_id, first_name, last_name, email, company, phone, role, is_active FROM users WHERE customer_id = $1",
+          [decoded.customer_id]
+        );
+
+        if (result.rows.length > 0 && result.rows[0].is_active) {
+          user = result.rows[0];
+          const allowedRoles = ["advertiser", "editor", "admin", "super_admin"];
+          isChatAdmin = allowedRoles.includes(user.role);
+        }
+      }
+    } catch (error) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    const customerId = user.customer_id;
+
+    if (!room_id || !description) {
+      return res.status(400).json({
+        status: "error",
+        message: "Oda ID ve açıklama gereklidir",
+      });
+    }
+
+    // Token maliyeti sabit 100
+
+    // Check if user has access to this room
+    const accessCheck = await query(
+      `SELECT 1 FROM chat_participants WHERE room_id = $1 AND user_id = $2`,
+      [room_id, customerId]
+    );
+
+    if (accessCheck.rows.length === 0 && !isChatAdmin) {
+      return res.status(403).json({
+        status: "error",
+        message: "Bu odaya erişim yetkiniz yok",
+      });
+    }
+
+    // Check if user has enough tokens
+    const tokenResult = await query(
+      `SELECT total_tokens, used_tokens, remaining_tokens
+       FROM user_tokens 
+       WHERE customer_id = $1`,
+      [customerId]
+    );
+
+    if (tokenResult.rows.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "Token bilgileri bulunamadı",
+      });
+    }
+
+    const currentTokens = tokenResult.rows[0];
+
+    if (currentTokens.remaining_tokens < token_cost) {
+      return res.status(400).json({
+        status: "error",
+        message: `Yetersiz token. Mevcut token: ${currentTokens.remaining_tokens}, Gerekli: ${token_cost}`,
+      });
+    }
+
+    // Start transaction
+    await query("BEGIN");
+
+    try {
+      // Create request
+      const requestResult = await query(
+        `INSERT INTO chat_requests (room_id, user_id, description, token_cost, status)
+         VALUES ($1, $2, $3, $4, 'pending')
+         RETURNING *`,
+        [room_id, customerId, description, token_cost]
+      );
+
+      // Update used tokens
+      await query(
+        `UPDATE user_tokens 
+         SET used_tokens = used_tokens + $1
+         WHERE customer_id = $2`,
+        [token_cost, customerId]
+      );
+
+      // Record transaction
+      await query(
+        `INSERT INTO token_transactions (customer_id, transaction_type, amount, description)
+         VALUES ($1, 'usage', $2, $3)`,
+        [customerId, token_cost, `Chat isteği: ${description.substring(0, 50)}`]
+      );
+
+      await query("COMMIT");
+
+      // Get request with user info
+      const requestWithUser = await query(
+        `SELECT 
+          cr.id,
+          cr.room_id,
+          cr.user_id,
+          cr.description,
+          cr.token_cost,
+          cr.status,
+          cr.created_at,
+          cr.updated_at,
+          cr.completed_at,
+          cr.completed_by,
+          u.first_name,
+          u.last_name,
+          u.email,
+          u.company
+         FROM chat_requests cr
+         INNER JOIN users u ON cr.user_id = u.customer_id
+         WHERE cr.id = $1`,
+        [requestResult.rows[0].id]
+      );
+
+      res.json({
+        status: "success",
+        message: "İstek başarıyla oluşturuldu",
+        data: {
+          request: requestWithUser.rows[0],
+        },
+      });
+    } catch (error) {
+      await query("ROLLBACK");
+      throw error;
+    }
+  } catch (error) {
+    console.error("Create request error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "İstek oluşturulurken bir hata oluştu",
+    });
+  }
+});
+
+// @route   GET /api/chat/requests/:roomId
+// @desc    Get requests for a specific room
+// @access  Private
+router.get("/requests/:roomId", async (req, res) => {
+  try {
+    const { roomId } = req.params;
+
+    // Authentication logic
+    let user = null;
+    let isChatAdmin = false;
+
+    try {
+      const authHeader = req.headers["authorization"];
+      const token = authHeader && authHeader.split(" ")[1];
+
+      if (token) {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const result = await query(
+          "SELECT customer_id, first_name, last_name, email, company, phone, role, is_active FROM users WHERE customer_id = $1",
+          [decoded.customer_id]
+        );
+
+        if (result.rows.length > 0 && result.rows[0].is_active) {
+          user = result.rows[0];
+          const allowedRoles = ["advertiser", "editor", "admin", "super_admin"];
+          isChatAdmin = allowedRoles.includes(user.role);
+        }
+      }
+    } catch (error) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        status: "error",
+        message: "Authentication required",
+      });
+    }
+
+    const customerId = user.customer_id;
+
+    // Check if user has access to this room
+    const accessCheck = await query(
+      `SELECT 1 FROM chat_participants WHERE room_id = $1 AND user_id = $2`,
+      [roomId, customerId]
+    );
+
+    if (accessCheck.rows.length === 0 && !isChatAdmin) {
+      return res.status(403).json({
+        status: "error",
+        message: "Bu odaya erişim yetkiniz yok",
+      });
+    }
+
+    const result = await query(
+      `SELECT 
+        cr.id,
+        cr.room_id,
+        cr.user_id,
+        cr.description,
+        cr.token_cost,
+        cr.status,
+        cr.created_at,
+        cr.updated_at,
+        cr.completed_at,
+        cr.completed_by,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.company,
+        completed_by_user.first_name as completed_by_first_name,
+        completed_by_user.last_name as completed_by_last_name
+       FROM chat_requests cr
+       INNER JOIN users u ON cr.user_id = u.customer_id
+       LEFT JOIN users completed_by_user ON cr.completed_by = completed_by_user.customer_id
+       WHERE cr.room_id = $1
+       ORDER BY cr.created_at DESC`,
+      [roomId]
+    );
+
+    res.json({
+      status: "success",
+      data: {
+        requests: result.rows,
+        total: result.rows.length,
+      },
+    });
+  } catch (error) {
+    console.error("Get requests error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "İstekler alınırken bir hata oluştu",
+    });
+  }
+});
+
+// @route   PUT /api/chat/requests/:requestId/complete
+// @desc    Mark request as completed (Admin only)
+// @access  Private
+router.put("/requests/:requestId/complete", authenticateChatAdmin, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const customerId = req.user.customer_id;
+
+    const result = await query(
+      `UPDATE chat_requests 
+       SET status = 'completed', 
+           completed_at = CURRENT_TIMESTAMP,
+           completed_by = $1
+       WHERE id = $2
+       RETURNING *`,
+      [customerId, requestId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        status: "error",
+        message: "İstek bulunamadı",
+      });
+    }
+
+    // Get request with user info
+    const requestWithUser = await query(
+      `SELECT 
+        cr.id,
+        cr.room_id,
+        cr.user_id,
+        cr.description,
+        cr.token_cost,
+        cr.status,
+        cr.created_at,
+        cr.updated_at,
+        cr.completed_at,
+        cr.completed_by,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.company,
+        completed_by_user.first_name as completed_by_first_name,
+        completed_by_user.last_name as completed_by_last_name
+       FROM chat_requests cr
+       INNER JOIN users u ON cr.user_id = u.customer_id
+       LEFT JOIN users completed_by_user ON cr.completed_by = completed_by_user.customer_id
+       WHERE cr.id = $1`,
+      [requestId]
+    );
+
+    res.json({
+      status: "success",
+      message: "İstek tamamlandı olarak işaretlendi",
+      data: {
+        request: requestWithUser.rows[0],
+      },
+    });
+  } catch (error) {
+    console.error("Complete request error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "İstek tamamlanırken bir hata oluştu",
+    });
+  }
+});
+
+// @route   GET /api/chat/requests/all
+// @desc    Get all requests (Admin only)
+// @access  Private
+router.get("/requests/all", authenticateChatAdmin, async (req, res) => {
+  try {
+    const { roomId, status } = req.query;
+
+    let queryText = `
+      SELECT 
+        cr.id,
+        cr.room_id,
+        cr.user_id,
+        cr.description,
+        cr.token_cost,
+        cr.status,
+        cr.created_at,
+        cr.updated_at,
+        cr.completed_at,
+        cr.completed_by,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.company,
+        completed_by_user.first_name as completed_by_first_name,
+        completed_by_user.last_name as completed_by_last_name,
+        cr_room.room_name
+       FROM chat_requests cr
+       INNER JOIN users u ON cr.user_id = u.customer_id
+       LEFT JOIN users completed_by_user ON cr.completed_by = completed_by_user.customer_id
+       LEFT JOIN chat_rooms cr_room ON cr.room_id = cr_room.id
+       WHERE 1=1
+    `;
+
+    const queryParams = [];
+    let paramIndex = 1;
+
+    if (roomId) {
+      queryText += ` AND cr.room_id = $${paramIndex}`;
+      queryParams.push(roomId);
+      paramIndex++;
+    }
+
+    if (status) {
+      queryText += ` AND cr.status = $${paramIndex}`;
+      queryParams.push(status);
+      paramIndex++;
+    }
+
+    queryText += ` ORDER BY cr.created_at DESC`;
+
+    const result = await query(queryText, queryParams);
+
+    res.json({
+      status: "success",
+      data: {
+        requests: result.rows,
+        total: result.rows.length,
+      },
+    });
+  } catch (error) {
+    console.error("Get all requests error:", error);
+    res.status(500).json({
+      status: "error",
+      message: "İstekler alınırken bir hata oluştu",
+    });
+  }
+});
+
 module.exports = router;

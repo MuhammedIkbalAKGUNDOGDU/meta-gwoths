@@ -270,6 +270,32 @@ const createTables = async (client) => {
       `CREATE INDEX IF NOT EXISTS idx_chat_permissions_user_id ON chat_permissions(user_id);`
     );
 
+    // Chat Requests table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_requests (
+        id SERIAL PRIMARY KEY,
+        room_id INTEGER REFERENCES chat_rooms(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(customer_id) ON DELETE CASCADE,
+        description TEXT NOT NULL,
+        token_cost INTEGER DEFAULT 100 NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'completed', 'cancelled')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        completed_at TIMESTAMP,
+        completed_by INTEGER REFERENCES users(customer_id) ON DELETE SET NULL
+      );
+    `);
+
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_chat_requests_room_id ON chat_requests(room_id);`
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_chat_requests_user_id ON chat_requests(user_id);`
+    );
+    await client.query(
+      `CREATE INDEX IF NOT EXISTS idx_chat_requests_status ON chat_requests(status);`
+    );
+
     // Create triggers for chat tables
     await client.query(`
       DROP TRIGGER IF EXISTS update_chat_rooms_updated_at ON chat_rooms;
@@ -283,6 +309,14 @@ const createTables = async (client) => {
       DROP TRIGGER IF EXISTS update_chat_messages_updated_at ON chat_messages;
       CREATE TRIGGER update_chat_messages_updated_at
         BEFORE UPDATE ON chat_messages
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    `);
+
+    await client.query(`
+      DROP TRIGGER IF EXISTS update_chat_requests_updated_at ON chat_requests;
+      CREATE TRIGGER update_chat_requests_updated_at
+        BEFORE UPDATE ON chat_requests
         FOR EACH ROW
         EXECUTE FUNCTION update_updated_at_column();
     `);

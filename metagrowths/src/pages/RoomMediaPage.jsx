@@ -9,6 +9,7 @@ const RoomMediaPage = () => {
   const [room, setRoom] = useState(null);
   const [users, setUsers] = useState([]);
   const [media, setMedia] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({
@@ -66,6 +67,20 @@ const RoomMediaPage = () => {
         setPagination(data.data.pagination);
       } else {
         setError(data.message || "Bir hata oluştu");
+      }
+
+      // Load requests
+      const requestsResponse = await fetch(
+        getApiUrl(`${API_ENDPOINTS.chatRequests}/${roomId}`),
+        {
+          method: "GET",
+          headers,
+        }
+      );
+
+      if (requestsResponse.ok) {
+        const requestsData = await requestsResponse.json();
+        setRequests(requestsData.data.requests || []);
       }
     } catch (error) {
       console.error("Fetch room media error:", error);
@@ -277,6 +292,119 @@ const RoomMediaPage = () => {
                 </p>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Requests List */}
+        <div className="bg-white rounded-lg shadow mb-8">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">İstekler</h3>
+          </div>
+          <div className="p-6">
+            {requests.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">
+                Henüz istek bulunmuyor
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {requests.map((request) => (
+                  <div
+                    key={request.id}
+                    className={`p-4 border rounded-lg ${
+                      request.status === "completed"
+                        ? "bg-green-50 border-green-200"
+                        : request.status === "in_progress"
+                        ? "bg-yellow-50 border-yellow-200"
+                        : "bg-gray-50 border-gray-200"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900 mb-1">
+                          {request.description}
+                        </p>
+                        <div className="flex items-center gap-4 text-xs text-gray-600">
+                          <span>
+                            {request.first_name} {request.last_name}
+                            {request.company && ` (${request.company})`}
+                          </span>
+                          <span>•</span>
+                          <span>{request.token_cost} token</span>
+                          <span>•</span>
+                          <span>
+                            {new Date(request.created_at).toLocaleDateString(
+                              "tr-TR"
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`px-3 py-1 text-xs rounded-full ${
+                            request.status === "completed"
+                              ? "bg-green-100 text-green-800"
+                              : request.status === "in_progress"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-blue-100 text-blue-800"
+                          }`}
+                        >
+                          {request.status === "completed"
+                            ? "Tamamlandı"
+                            : request.status === "in_progress"
+                            ? "Yapılıyor"
+                            : "Beklemede"}
+                        </span>
+                        {request.status !== "completed" && (
+                          <button
+                            onClick={async () => {
+                              try {
+                                const token = getChatAdminToken();
+                                const headers = getChatAdminHeaders(token);
+                                const response = await fetch(
+                                  getApiUrl(
+                                    `/chat/requests/${request.id}/complete`
+                                  ),
+                                  {
+                                    method: "PUT",
+                                    headers,
+                                  }
+                                );
+
+                                if (response.ok) {
+                                  const data = await response.json();
+                                  setRequests((prev) =>
+                                    prev.map((r) =>
+                                      r.id === request.id
+                                        ? data.data.request
+                                        : r
+                                    )
+                                  );
+                                }
+                              } catch (err) {
+                                console.error("Complete request error:", err);
+                                alert("İstek tamamlanırken bir hata oluştu");
+                              }
+                            }}
+                            className="px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                          >
+                            Tamamla
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {request.completed_by_first_name && (
+                      <p className="text-xs text-gray-500 mt-2">
+                        Tamamlayan: {request.completed_by_first_name}{" "}
+                        {request.completed_by_last_name} -{" "}
+                        {new Date(request.completed_at).toLocaleDateString(
+                          "tr-TR"
+                        )}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

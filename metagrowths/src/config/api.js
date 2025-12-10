@@ -43,6 +43,9 @@ export const API_ENDPOINTS = {
   joinChatRoom: "/chat/rooms",
   leaveChatRoom: "/chat/rooms",
   removeParticipant: "/chat/rooms",
+  // Chat request endpoints
+  chatRequests: "/chat/requests",
+  chatRequestsAll: "/chat/requests/all",
 
   // Health check
   health: "/health",
