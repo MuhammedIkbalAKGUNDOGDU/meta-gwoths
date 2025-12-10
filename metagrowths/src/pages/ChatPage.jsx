@@ -279,7 +279,7 @@ const ChatPage = () => {
     const authToken = activeToken;
 
     // Initialize socket connection
-    socketRef.current = io("http://localhost:5000", {
+    socketRef.current = io("http://localhost:5001", {
       auth: {
         token: authToken,
       },
