@@ -77,10 +77,54 @@ const SuperAdminPage = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setCustomers(data.data.customers || []);
+        // Sadece customer rolündeki kullanıcıları filtrele
+        const customerUsers = (data.data.customers || []).filter(
+          (user) => user.role === "customer"
+        );
+        setCustomers(customerUsers);
       }
     } catch (error) {
       console.error("Customers fetch error:", error);
+    }
+  };
+
+  const toggleCustomerStatus = async (customerId, currentStatus) => {
+    try {
+      const token = getAdminToken();
+      const newStatus = !currentStatus;
+      
+      const response = await fetch(
+        getApiUrl(`${API_ENDPOINTS.updateCustomerStatus}/${customerId}/status`),
+        {
+          method: "PUT",
+          headers: {
+            ...getAdminHeaders(token),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            is_active: newStatus,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update local state
+        setCustomers((prev) =>
+          prev.map((customer) =>
+            customer.customer_id === customerId
+              ? { ...customer, is_active: newStatus }
+              : customer
+          )
+        );
+        alert(data.message || "Kullanıcı durumu güncellendi");
+      } else {
+        const errorData = await response.json();
+        alert(errorData.message || "Kullanıcı durumu güncellenirken bir hata oluştu");
+      }
+    } catch (error) {
+      console.error("Toggle customer status error:", error);
+      alert("Kullanıcı durumu güncellenirken bir hata oluştu");
     }
   };
 
@@ -427,19 +471,36 @@ const SuperAdminPage = () => {
                           </p>
                         )}
                       </div>
-                      <div className="text-right">
+                      <div className="text-right flex flex-col items-end gap-2">
                         <p className="text-sm text-slate-500">
                           Kayıt: {formatDate(customer.created_at)}
                         </p>
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            customer.is_active
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {customer.is_active ? "Aktif" : "Pasif"}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              customer.is_active
+                                ? "bg-green-100 text-green-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {customer.is_active ? "Aktif" : "Pasif"}
+                          </span>
+                          <button
+                            onClick={() =>
+                              toggleCustomerStatus(
+                                customer.customer_id,
+                                customer.is_active
+                              )
+                            }
+                            className={`px-3 py-1 text-xs rounded-lg font-medium transition-colors ${
+                              customer.is_active
+                                ? "bg-red-600 text-white hover:bg-red-700"
+                                : "bg-green-600 text-white hover:bg-green-700"
+                            }`}
+                          >
+                            {customer.is_active ? "Pasif Yap" : "Aktif Yap"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>

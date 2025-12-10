@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
     company VARCHAR(100),
     phone VARCHAR(20),
     role VARCHAR(20) DEFAULT 'customer' CHECK (role IN ('customer', 'advertiser', 'editor', 'admin', 'super_admin')),
-    is_active BOOLEAN DEFAULT true,
+    is_active BOOLEAN DEFAULT false,
     is_chat_page_selected BOOLEAN DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

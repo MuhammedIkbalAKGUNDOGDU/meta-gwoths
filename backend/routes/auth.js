@@ -501,6 +501,7 @@ router.get(
         created_at,
         updated_at
       FROM users
+      WHERE role = 'customer'
       ORDER BY created_at DESC
     `);
 
@@ -516,6 +517,64 @@ router.get(
       res.status(500).json({
         status: "error",
         message: "Müşteri bilgileri alınırken bir hata oluştu",
+      });
+    }
+  }
+);
+
+// @route   PUT /api/auth/customers/:customerId/status
+// @desc    Toggle customer active status (Super Admin only)
+// @access  Private
+router.put(
+  "/customers/:customerId/status",
+  authenticateAdmin,
+  authorizeRole(["super_admin"]),
+  async (req, res) => {
+    try {
+      const { customerId } = req.params;
+      const { is_active } = req.body;
+
+      if (typeof is_active !== "boolean") {
+        return res.status(400).json({
+          status: "error",
+          message: "is_active değeri boolean olmalıdır",
+        });
+      }
+
+      // Check if customer exists
+      const userResult = await query(
+        "SELECT customer_id FROM users WHERE customer_id = $1",
+        [customerId]
+      );
+
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({
+          status: "error",
+          message: "Kullanıcı bulunamadı",
+        });
+      }
+
+      // Update customer status
+      const result = await query(
+        `UPDATE users 
+         SET is_active = $1, updated_at = CURRENT_TIMESTAMP
+         WHERE customer_id = $2
+         RETURNING customer_id, first_name, last_name, email, is_active`,
+        [is_active, customerId]
+      );
+
+      res.json({
+        status: "success",
+        message: `Kullanıcı ${is_active ? "aktif" : "pasif"} olarak güncellendi`,
+        data: {
+          customer: result.rows[0],
+        },
+      });
+    } catch (error) {
+      console.error("Update customer status error:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Kullanıcı durumu güncellenirken bir hata oluştu",
       });
     }
   }

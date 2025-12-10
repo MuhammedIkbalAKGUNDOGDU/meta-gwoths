@@ -547,7 +547,9 @@ const ChatAdminPage = () => {
                           Katılımcılar
                         </h5>
                         <div className="space-y-2">
-                          {participants.map((participant, index) => (
+                          {participants
+                            .filter((p) => p.role === "customer")
+                            .map((participant, index) => (
                             <div
                               key={`${participant.user_id}-${index}`}
                               className="flex items-center justify-between p-2 bg-white rounded-lg"

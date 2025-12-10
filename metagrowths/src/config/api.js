@@ -32,6 +32,8 @@ export const API_ENDPOINTS = {
   purchaseTokens: "/auth/tokens/purchase",
   allTokens: "/auth/tokens/all",
   allTokenTransactions: "/auth/tokens/transactions/all",
+  // Customer management endpoints
+  updateCustomerStatus: "/auth/customers",
   // Chat endpoints
   chatRooms: "/chat/rooms",
   chatRoomsAll: "/chat/rooms/all",

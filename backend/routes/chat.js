@@ -1377,7 +1377,7 @@ router.get("/media/room/:roomId", authenticateChatAdmin, async (req, res) => {
 
     const room = roomResult.rows[0];
 
-    // Get all users who have sent messages in this room
+    // Get all users who have sent messages in this room (only customers)
     const usersQuery = `
       SELECT DISTINCT 
         u.customer_id as id,
@@ -1385,12 +1385,13 @@ router.get("/media/room/:roomId", authenticateChatAdmin, async (req, res) => {
         u.last_name,
         u.email,
         u.company,
+        u.role,
         COUNT(cm.id) as message_count,
         MAX(cm.created_at) as last_message_at
       FROM users u
       INNER JOIN chat_messages cm ON u.customer_id = cm.sender_id
-      WHERE cm.room_id = $1
-      GROUP BY u.customer_id, u.first_name, u.last_name, u.email, u.company
+      WHERE cm.room_id = $1 AND u.role = 'customer'
+      GROUP BY u.customer_id, u.first_name, u.last_name, u.email, u.company, u.role
       ORDER BY last_message_at DESC
     `;
     const usersResult = await query(usersQuery, [roomId]);
