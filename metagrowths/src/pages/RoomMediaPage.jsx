@@ -415,9 +415,7 @@ const RoomMediaPage = () => {
           </div>
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {users
-                .filter((user) => user.role === "customer")
-                .map((user) => (
+              {users.map((user) => (
                 <div
                   key={user.id}
                   className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -489,9 +487,7 @@ const RoomMediaPage = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="all">Tüm Kullanıcılar</option>
-                  {users
-                    .filter((user) => user.role === "customer")
-                    .map((user) => (
+                  {users.map((user) => (
                     <option key={user.id} value={user.id}>
                       {user.full_name} {user.company ? `(${user.company})` : ""}
                     </option>
