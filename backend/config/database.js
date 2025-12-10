@@ -294,7 +294,12 @@ const createTables = async (client) => {
       BEGIN
         INSERT INTO chat_rooms (room_name, room_description, created_by, room_type)
         VALUES (
-          'Chat Odası - ' || NEW.first_name || ' ' || NEW.last_name,
+          CASE 
+            WHEN NEW.company IS NOT NULL AND NEW.company != '' THEN
+              'Chat Odası - ' || NEW.company || ' - ' || NEW.first_name || ' ' || NEW.last_name
+            ELSE
+              'Chat Odası - ' || NEW.first_name || ' ' || NEW.last_name
+          END,
           NEW.first_name || ' ' || NEW.last_name || ' için özel chat odası',
           NEW.customer_id,
           'customer'
@@ -321,7 +326,12 @@ const createTables = async (client) => {
     await client.query(`
       INSERT INTO chat_rooms (room_name, room_description, created_by, room_type)
       SELECT 
-        'Chat Odası - ' || u.first_name || ' ' || u.last_name,
+        CASE 
+          WHEN u.company IS NOT NULL AND u.company != '' THEN
+            'Chat Odası - ' || u.company || ' - ' || u.first_name || ' ' || u.last_name
+          ELSE
+            'Chat Odası - ' || u.first_name || ' ' || u.last_name
+        END,
         u.first_name || ' ' || u.last_name || ' için özel chat odası',
         u.customer_id,
         'customer'
@@ -337,6 +347,25 @@ const createTables = async (client) => {
       FROM chat_rooms cr
       LEFT JOIN chat_participants cp ON cr.id = cp.room_id AND cr.created_by = cp.user_id
       WHERE cp.id IS NULL;
+    `);
+
+    // Update existing chat room names to include company name if available
+    await client.query(`
+      UPDATE chat_rooms cr
+      SET room_name = CASE 
+        WHEN u.company IS NOT NULL AND u.company != '' THEN
+          'Chat Odası - ' || u.company || ' - ' || u.first_name || ' ' || u.last_name
+        ELSE
+          'Chat Odası - ' || u.first_name || ' ' || u.last_name
+      END
+      FROM users u
+      WHERE cr.created_by = u.customer_id
+        AND cr.room_name != CASE 
+          WHEN u.company IS NOT NULL AND u.company != '' THEN
+            'Chat Odası - ' || u.company || ' - ' || u.first_name || ' ' || u.last_name
+          ELSE
+            'Chat Odası - ' || u.first_name || ' ' || u.last_name
+        END;
     `);
 
     console.log(

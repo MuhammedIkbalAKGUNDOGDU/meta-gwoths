@@ -560,6 +560,11 @@ const ChatAdminPage = () => {
                                 <p className="text-xs text-slate-600">
                                   {participant.email}
                                 </p>
+                                {participant.company && (
+                                  <p className="text-xs text-slate-500">
+                                    {participant.company}
+                                  </p>
+                                )}
                               </div>
                               <span
                                 className={`px-2 py-1 text-xs rounded-full ${getRoleColor(

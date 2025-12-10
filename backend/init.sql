@@ -300,7 +300,12 @@ RETURNS TRIGGER AS $$
 BEGIN
     INSERT INTO chat_rooms (room_name, room_description, created_by, room_type)
     VALUES (
-        'Chat Odası - ' || NEW.first_name || ' ' || NEW.last_name,
+        CASE 
+            WHEN NEW.company IS NOT NULL AND NEW.company != '' THEN
+                'Chat Odası - ' || NEW.company || ' - ' || NEW.first_name || ' ' || NEW.last_name
+            ELSE
+                'Chat Odası - ' || NEW.first_name || ' ' || NEW.last_name
+        END,
         NEW.first_name || ' ' || NEW.last_name || ' için özel chat odası',
         NEW.customer_id,
         'customer'

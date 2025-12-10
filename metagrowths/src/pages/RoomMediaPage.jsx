@@ -303,6 +303,9 @@ const RoomMediaPage = () => {
                       {user.full_name}
                     </p>
                     <p className="text-xs text-gray-500">{user.email}</p>
+                    {user.company && (
+                      <p className="text-xs text-gray-500">{user.company}</p>
+                    )}
                     <p className="text-xs text-gray-400">
                       {user.message_count} mesaj
                     </p>
@@ -358,7 +361,7 @@ const RoomMediaPage = () => {
                   <option value="all">Tüm Kullanıcılar</option>
                   {users.map((user) => (
                     <option key={user.id} value={user.id}>
-                      {user.full_name}
+                      {user.full_name} {user.company ? `(${user.company})` : ""}
                     </option>
                   ))}
                 </select>

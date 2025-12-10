@@ -141,6 +141,7 @@ router.get(
         creator.first_name as creator_first_name,
         creator.last_name as creator_last_name,
         creator.email as creator_email,
+        creator.company as creator_company,
         (SELECT COUNT(*) FROM chat_participants WHERE room_id = cr.id) as participant_count
       FROM chat_rooms cr
       LEFT JOIN users creator ON cr.created_by = creator.customer_id
@@ -1383,12 +1384,13 @@ router.get("/media/room/:roomId", authenticateChatAdmin, async (req, res) => {
         u.first_name,
         u.last_name,
         u.email,
+        u.company,
         COUNT(cm.id) as message_count,
         MAX(cm.created_at) as last_message_at
       FROM users u
       INNER JOIN chat_messages cm ON u.customer_id = cm.sender_id
       WHERE cm.room_id = $1
-      GROUP BY u.customer_id, u.first_name, u.last_name, u.email
+      GROUP BY u.customer_id, u.first_name, u.last_name, u.email, u.company
       ORDER BY last_message_at DESC
     `;
     const usersResult = await query(usersQuery, [roomId]);
@@ -1467,6 +1469,7 @@ router.get("/media/room/:roomId", authenticateChatAdmin, async (req, res) => {
           first_name: user.first_name,
           last_name: user.last_name,
           email: user.email,
+          company: user.company || null,
           full_name: `${user.first_name} ${user.last_name}`,
           message_count: parseInt(user.message_count),
           last_message_at: user.last_message_at,
