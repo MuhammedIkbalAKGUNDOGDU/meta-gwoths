@@ -1,8 +1,6 @@
 // API Configuration
-// export const API_BASE_URL =
-//   import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
-
-  export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+export const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
 
 // API Endpoints
 export const API_ENDPOINTS = {
@@ -36,6 +34,7 @@ export const API_ENDPOINTS = {
   allTokenTransactions: "/auth/tokens/transactions/all",
   // Customer management endpoints
   updateCustomerStatus: "/auth/customers",
+  chatUsersAll: "/auth/chat-users/all",
   // Chat endpoints
   chatRooms: "/chat/rooms",
   chatRoomsAll: "/chat/rooms/all",

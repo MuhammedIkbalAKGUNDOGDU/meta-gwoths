@@ -123,11 +123,20 @@ const LoginPage = () => {
         }),
       });
 
-      const data = await response.json();
-
+      // Check if response is ok before parsing JSON
       if (!response.ok) {
-        throw new Error(data.message || "Giriş işlemi başarısız");
+        let errorMessage = "Giriş işlemi başarısız";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          // If response is not JSON, use status text
+          errorMessage = response.statusText || `Sunucu hatası: ${response.status}`;
+        }
+        throw new Error(errorMessage);
       }
+
+      const data = await response.json();
 
       // Başarılı giriş
       if (data.status === "success") {

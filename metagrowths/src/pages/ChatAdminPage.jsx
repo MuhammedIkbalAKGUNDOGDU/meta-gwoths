@@ -38,20 +38,45 @@ const ChatAdminPage = () => {
       setIsLoading(true);
       setError(null);
       const token = getChatAdminToken();
+      
+      if (!token) {
+        setError("Chat admin token bulunamadı. Lütfen tekrar giriş yapın.");
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("🔍 Fetching chat rooms:", {
+        url: getApiUrl("/chat/rooms/all"),
+        token: token ? `${token.substring(0, 20)}...` : "null",
+      });
+
       const response = await fetch(getApiUrl("/chat/rooms/all"), {
         method: "GET",
         headers: getChatAdminHeaders(token),
       });
 
+      console.log("🔍 Chat rooms response:", {
+        status: response.status,
+        ok: response.ok,
+      });
+
       if (!response.ok) {
-        throw new Error("Chat odaları alınamadı");
+        let errorMessage = "Chat odaları alınamadı";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          errorMessage = `Sunucu hatası: ${response.status} ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
-      setChatRooms(data.data.rooms || []);
+      console.log("🔍 Chat rooms data:", data);
+      setChatRooms(data.data?.rooms || []);
     } catch (err) {
       console.error("Chat rooms fetch error:", err);
-      setError("Chat odaları yüklenirken bir hata oluştu");
+      setError(err.message || "Chat odaları yüklenirken bir hata oluştu");
     } finally {
       setIsLoading(false);
     }

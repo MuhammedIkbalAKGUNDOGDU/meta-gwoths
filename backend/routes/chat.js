@@ -123,8 +123,7 @@ router.get("/rooms", authenticateToken, async (req, res) => {
 // @access  Private
 router.get(
   "/rooms/all",
-  authenticateAdmin,
-  authorizeRole(["super_admin", "admin", "editor", "advertiser"]),
+  authenticateChatAdmin,
   async (req, res) => {
     try {
       const result = await query(`

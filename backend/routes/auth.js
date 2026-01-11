@@ -522,6 +522,49 @@ router.get(
   }
 );
 
+// @route   GET /api/auth/chat-users/all
+// @desc    Get all chat management users (Super Admin only)
+// @access  Private
+router.get(
+  "/chat-users/all",
+  authenticateAdmin,
+  authorizeRole(["super_admin"]),
+  async (req, res) => {
+    try {
+      const result = await query(`
+      SELECT 
+        customer_id,
+        first_name,
+        last_name,
+        email,
+        company,
+        phone,
+        role,
+        is_active,
+        created_at,
+        updated_at
+      FROM users
+      WHERE role IN ('advertiser', 'editor', 'admin', 'super_admin')
+      ORDER BY created_at DESC
+    `);
+
+      res.json({
+        status: "success",
+        data: {
+          users: result.rows,
+          total: result.rows.length,
+        },
+      });
+    } catch (error) {
+      console.error("Chat users retrieval error:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Chat yönetimi hesapları alınırken bir hata oluştu",
+      });
+    }
+  }
+);
+
 // @route   PUT /api/auth/customers/:customerId/status
 // @desc    Toggle customer active status (Super Admin only)
 // @access  Private

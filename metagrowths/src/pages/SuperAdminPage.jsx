@@ -148,18 +148,28 @@ const SuperAdminPage = () => {
   const fetchChatUsers = async () => {
     try {
       const token = getAdminToken();
-      const response = await fetch(getApiUrl("/auth/customers/all"), {
+      const response = await fetch(getApiUrl(API_ENDPOINTS.chatUsersAll), {
         method: "GET",
         headers: getAdminHeaders(token),
       });
 
       if (response.ok) {
         const data = await response.json();
-        // Sadece chat yönetimi rolleri olan kullanıcıları filtrele
-        const chatUsers = data.data.customers.filter((user) =>
-          ["advertiser", "editor", "admin"].includes(user.role)
-        );
-        setChatUsers(chatUsers);
+        setChatUsers(data.data.users || []);
+      } else {
+        console.error("Chat users fetch failed:", response.status, response.statusText);
+        // Fallback: eski endpoint'i dene
+        const fallbackResponse = await fetch(getApiUrl("/auth/customers/all"), {
+          method: "GET",
+          headers: getAdminHeaders(token),
+        });
+        if (fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json();
+          const chatUsers = (fallbackData.data.customers || []).filter((user) =>
+            ["advertiser", "editor", "admin", "super_admin"].includes(user.role)
+          );
+          setChatUsers(chatUsers);
+        }
       }
     } catch (error) {
       console.error("Chat users fetch error:", error);
