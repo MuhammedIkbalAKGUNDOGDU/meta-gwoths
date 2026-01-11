@@ -11,6 +11,7 @@ const {
   authenticateChatAdmin,
   authorizeRole,
 } = require("../middleware/auth");
+const { getIO } = require("../socket");
 
 // Multer konfigürasyonu - kullanıcı bazlı medya yükleme için
 const storage = multer.diskStorage({
@@ -571,6 +572,16 @@ router.post("/messages/image", upload.single("image"), async (req, res) => {
       [room_id]
     );
 
+    // Broadcast message via Socket.IO
+    try {
+      const io = getIO();
+      io.to(`room_${room_id}`).emit("receive_message", messageData);
+      console.log(`📤 Image message broadcasted to room_${room_id}`);
+    } catch (socketError) {
+      console.error("Socket.IO broadcast error:", socketError);
+      // Continue even if socket broadcast fails
+    }
+
     res.json({
       status: "success",
       message: "Resim mesajı başarıyla gönderildi",
@@ -744,6 +755,16 @@ router.post("/messages/media", upload.single("media"), async (req, res) => {
       [room_id]
     );
 
+    // Broadcast message via Socket.IO
+    try {
+      const io = getIO();
+      io.to(`room_${room_id}`).emit("receive_message", messageData);
+      console.log(`📤 Media message broadcasted to room_${room_id}`);
+    } catch (socketError) {
+      console.error("Socket.IO broadcast error:", socketError);
+      // Continue even if socket broadcast fails
+    }
+
     res.json({
       status: "success",
       message: `${isVideo ? "Video" : "Resim"} mesajı başarıyla gönderildi`,
@@ -903,6 +924,16 @@ router.post("/messages", async (req, res) => {
     `,
       [room_id]
     );
+
+    // Broadcast message via Socket.IO
+    try {
+      const io = getIO();
+      io.to(`room_${room_id}`).emit("receive_message", messageData);
+      console.log(`📤 Message broadcasted to room_${room_id}`);
+    } catch (socketError) {
+      console.error("Socket.IO broadcast error:", socketError);
+      // Continue even if socket broadcast fails
+    }
 
     res.json({
       status: "success",

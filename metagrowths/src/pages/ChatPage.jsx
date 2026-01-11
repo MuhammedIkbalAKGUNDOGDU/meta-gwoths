@@ -4,7 +4,7 @@ import { io } from "socket.io-client";
 import Header from "../components/Header";
 import TokenInfo from "../components/TokenInfo";
 import TokenTransactions from "../components/TokenTransactions";
-import { getApiUrl, getAuthHeaders, API_ENDPOINTS } from "../config/api";
+import { getApiUrl, getAuthHeaders, API_ENDPOINTS, SOCKET_IO_URL } from "../config/api";
 import { useAuth } from "../utils/auth";
 import {
   isChatAdminAuthenticated,
@@ -31,12 +31,10 @@ const ChatPage = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
-  const [isVisible, setIsVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentRoom, setCurrentRoom] = useState(null);
   const [participants, setParticipants] = useState([]);
-  const [userRole, setUserRole] = useState(null);
   const [isTyping, setIsTyping] = useState(false);
   const [typingUsers, setTypingUsers] = useState([]);
   const [selectedMedia, setSelectedMedia] = useState(null);
@@ -48,7 +46,6 @@ const ChatPage = () => {
   const [requestDescription, setRequestDescription] = useState("");
 
   useEffect(() => {
-    setIsVisible(true);
     checkUserAccess();
     if (activeToken) {
       initializeChat();
@@ -237,7 +234,6 @@ const ChatPage = () => {
       const data = await response.json();
       setCurrentRoom(data.data.room);
       setParticipants(data.data.participants);
-      setUserRole(data.data.user_role);
 
       // Load messages
       await loadMessages(roomId);
@@ -357,7 +353,7 @@ const ChatPage = () => {
     const authToken = activeToken;
 
     // Initialize socket connection
-    socketRef.current = io("http://34.65.144.183:5000", {
+    socketRef.current = io(SOCKET_IO_URL, {
       auth: {
         token: authToken,
       },
@@ -1084,7 +1080,6 @@ const ChatPage = () => {
                 onClick={() => {
                   setShowRequestModal(false);
                   setRequestDescription("");
-                  setRequestTokenCost(10);
                 }}
                 className="text-slate-400 hover:text-slate-600"
               >

@@ -2,6 +2,13 @@
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5001/api";
 
+// Socket.IO Configuration
+// Extract base URL from API_BASE_URL (remove /api suffix)
+export const SOCKET_IO_URL =
+  import.meta.env.VITE_SOCKET_IO_URL ||
+  API_BASE_URL.replace(/\/api$/, "").replace(/\/$/, "") ||
+  "http://localhost:5001";
+
 // API Endpoints
 export const API_ENDPOINTS = {
   // Auth endpoints
