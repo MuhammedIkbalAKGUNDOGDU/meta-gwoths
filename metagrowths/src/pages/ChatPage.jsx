@@ -59,7 +59,9 @@ const ChatPage = () => {
   useEffect(() => {
     return () => {
       if (socketRef.current) {
+        socketRef.current.removeAllListeners();
         socketRef.current.disconnect();
+        socketRef.current = null;
       }
     };
   }, []);
@@ -349,6 +351,12 @@ const ChatPage = () => {
   };
 
   const initializeSocket = (roomId) => {
+    // Önceki socket bağlantısını temizle
+    if (socketRef.current) {
+      socketRef.current.removeAllListeners();
+      socketRef.current.disconnect();
+    }
+
     // Aktif token'ı kullan
     const authToken = activeToken;
 
@@ -365,7 +373,14 @@ const ChatPage = () => {
     });
 
     socketRef.current.on("receive_message", (message) => {
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) => {
+        // Duplicate kontrolü: Aynı mesaj ID'si varsa ekleme
+        const exists = prev.some((msg) => msg.id === message.id);
+        if (exists) {
+          return prev;
+        }
+        return [...prev, message];
+      });
     });
 
     socketRef.current.on("user_typing", (data) => {
@@ -436,10 +451,10 @@ const ChatPage = () => {
         throw new Error("Mesaj gönderilemedi");
       }
 
-      const data = await response.json();
+      // Response'u kontrol et ama mesajı local state'e ekleme
+      // Socket.IO broadcast zaten yapacak, duplicate'leri önlemek için
+      await response.json();
 
-      // Add message to local state
-      setMessages((prev) => [...prev, data.data.message]);
       setNewMessage("");
 
       // Emit typing stop
@@ -538,10 +553,10 @@ const ChatPage = () => {
         throw new Error("Medya gönderilemedi");
       }
 
-      const data = await response.json();
+      // Response'u kontrol et ama mesajı local state'e ekleme
+      // Socket.IO broadcast zaten yapacak, duplicate'leri önlemek için
+      await response.json();
 
-      // Add message to local state
-      setMessages((prev) => [...prev, data.data.message]);
       setNewMessage("");
       setSelectedMedia(null);
       setMediaPreview(null);
@@ -551,16 +566,7 @@ const ChatPage = () => {
       if (socketRef.current) {
         socketRef.current.emit("stop_typing", { roomId: currentRoom.id });
       }
-
-      // Socket ile mesajı broadcast et
-      if (socketRef.current) {
-        socketRef.current.emit("send_message", {
-          roomId: currentRoom.id,
-          messageContent: data.data.message.message_content || "",
-          messageType: mediaType,
-          replyToMessageId: null,
-        });
-      }
+      // Backend zaten Socket.IO broadcast yapıyor, burada tekrar emit etmeye gerek yok
     } catch (err) {
       console.error("Send media error:", err);
       setError("Medya gönderilirken bir hata oluştu");
