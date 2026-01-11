@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import Header from "../components/Header";
@@ -45,6 +45,11 @@ const ChatPage = () => {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [requestDescription, setRequestDescription] = useState("");
 
+  // Scroll to bottom function - must be defined before useEffect hooks
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
+
   useEffect(() => {
     checkUserAccess();
     if (activeToken) {
@@ -54,7 +59,16 @@ const ChatPage = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, scrollToBottom]);
+
+  // Sayfa açıldığında ve loading bittiğinde en alta scroll et
+  useEffect(() => {
+    if (!loading && messages.length > 0) {
+      setTimeout(() => {
+        scrollToBottom();
+      }, 200);
+    }
+  }, [loading, messages.length, scrollToBottom]);
 
   useEffect(() => {
     return () => {
@@ -344,6 +358,10 @@ const ChatPage = () => {
 
       const data = await response.json();
       setMessages(data.data.messages);
+      // Mesajlar yüklendikten sonra en alta scroll et
+      setTimeout(() => {
+        scrollToBottom();
+      }, 100);
     } catch (err) {
       console.error("Load messages error:", err);
       setError("Mesajlar yüklenirken bir hata oluştu");
@@ -413,10 +431,6 @@ const ChatPage = () => {
     socketRef.current.on("disconnect", () => {
       console.log("Socket disconnected");
     });
-  };
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   const handleSendMessage = async () => {
