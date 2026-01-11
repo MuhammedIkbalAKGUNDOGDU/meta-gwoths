@@ -509,9 +509,9 @@ const ChatPage = () => {
   const handleMediaSelect = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Dosya boyutu kontrolü (50MB)
-      if (file.size > 50 * 1024 * 1024) {
-        setError("Dosya 50MB'dan büyük olamaz");
+      // Dosya boyutu kontrolü (100MB)
+      if (file.size > 100 * 1024 * 1024) {
+        setError("Dosya 100MB'dan büyük olamaz");
         return;
       }
 
